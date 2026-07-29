@@ -1,5 +1,13 @@
 # Core ML 
 pandas
+numpy
+scipy
+
+# Visualization
+matplotlib
+seaborn
+
+# Models
 
 # Database
 sqlalchemy 
