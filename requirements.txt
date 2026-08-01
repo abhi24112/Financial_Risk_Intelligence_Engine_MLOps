@@ -21,3 +21,6 @@ psycopg2-binary
 
 # Linting
 pre-commit
+
+# configs
+pyyaml
