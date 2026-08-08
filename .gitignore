@@ -7,3 +7,5 @@ dataset/train_transaction.csv
 dataset/train_identity.csv
 
 logs
+
+__pycache__
