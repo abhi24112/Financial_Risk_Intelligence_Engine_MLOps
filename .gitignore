@@ -3,8 +3,7 @@
 .env
 
 dataset
-dataset/sample_submission.csv
-dataset/test_transaction.csv
 dataset/train_transaction.csv
-dataset/test_identity.csv
 dataset/train_identity.csv
+
+logs

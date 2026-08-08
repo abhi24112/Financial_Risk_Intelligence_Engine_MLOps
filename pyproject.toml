@@ -3,6 +3,11 @@ name = "adaptive-financial-risk-intelligence-engine"
 version = "0.1.0"
 description = "MLOps project for transaction fraud detection"
 authors = ["Abhishek <abhishekprajapati2619@gmail.com>"]
+packages = [
+  { include = "shared" },
+  { include = "database" },
+  { include = "pipelines" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.12"
