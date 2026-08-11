@@ -406,25 +406,67 @@ environment variables / secrets management for anything beyond local dev.)*
 This section lists the implemented tasks and what needs to be worked on next, so new chats or other agents can seamlessly pick up the context.
 
 ### Current Progress
-1. **Database Setup**: Completed raw transactions loading into PostgreSQL.
-2. **Ingestion Pipeline (`ingestion_pipeline.py`)**: Implemented. Successfully loads raw CSV datasets (`transaction_raw.csv`, `identity_raw.csv`) from `dataset/raw` into PostgreSQL tables (`transaction_raw`, `identity_raw`).
-3. **Validation Pipeline (`validation_pipeline.py`)**: Implemented. Validates data in PostgreSQL against schema constraints, duplicate checks, empty table checks, and NULL primary keys/target columns.
-   - Generates validation report at `dataset/validation_reports/validation_report.json`.
-   - Verified successfully with the test runner.
-4. **Imports & Configuration**: Fixed logging module import issues to avoid circular dependency bugs when importing `shared.constants` from logging configurations.
+
+1. **Database Setup**: Completed. Raw transactions loaded into PostgreSQL (`fraud_risk` DB, user `fraud_user`).
+
+2. **Ingestion Pipeline (`pipelines/ingestion_pipeline.py`)**: ✅ Complete.
+   - Loads `transaction_raw.csv` and `identity_raw.csv` from `dataset/raw/` into PostgreSQL tables `transaction_raw` and `identity_raw`.
+   - Verified working with test runner.
+
+3. **Validation Pipeline (`pipelines/validation_pipeline.py`)**: ✅ Complete.
+   - Validates data in PostgreSQL: empty table checks, NULL primary keys, NULL `isFraud` target, duplicate `TransactionID` checks.
+   - Generates `dataset/validation_reports/validation_report.json`.
+   - Both tables passed: `transaction_raw` (590,540 rows) and `identity_raw` (144,233 rows).
+   - Verified working with `tests/unit/validation_pipeline_test.py`.
+
+4. **Cleaning Pipeline (`pipelines/cleaning_pipeline.py`)**: ✅ Complete (partial — column dropping done, missing value handling still TODO).
+   - Loads only the required columns (`SELECTED_FEATURES_TO_KEEP` from constants) at query time — avoids loading all 394 columns.
+   - Reads data in chunks of 50,000 rows and downcasts `float64` → `float32` to prevent `ArrayMemoryError` on systems with limited RAM.
+   - Merges `transaction_raw` + `identity_raw` on `TransactionID` (left join) and verifies row count is unchanged post-merge.
+   - Drops the 149 columns not in the keep-list.
+   - Frees intermediate DataFrames immediately post-merge using `del` + `gc.collect()`.
+   - Verified working: 590,540 rows × 285 columns after drop.
+   - **Remaining TODO**: `_filling_missing_values()` method (currently commented out) — fill NaNs per column strategy, extract `addr1_missing`/`addr2_missing` flags, save cleaned output to `dataset/processed/cleaned.parquet`.
+
+5. **Bug Fixes & Infrastructure**:
+   - **Circular import fix** (`shared/logging/logging_config.py`): Changed `from shared import constants` → `from shared.constants import constants` to avoid the logger module importing from an uninitialized `shared` package.
+   - **Log file override fix** (`shared/logging/logging_config.py`): Added `force=True` to `logging.basicConfig()` so each pipeline can reconfigure the root logger to its own log file (e.g., `cleaning.log`) even when another module has already initialized logging.
+   - **Ruff linting fixes**:
+     - `database/connection.py` E402: Moved `from sqlalchemy import create_engine, text` above the `configure_logging()` call.
+     - `shared/__init__.py` F403/F405: Replaced `from shared.logging.logging_config import *` with explicit `from shared.logging.logging_config import configure_logging`.
+     - `pyproject.toml` deprecation warning: `select` should be moved to `[tool.ruff.lint]` section — **still TODO**.
+     - `tests/unit/logging_testing.py` E501: Line too long — **still TODO** (user denied write permission last time).
 
 ### Running Pipeline Scripts / Tests
-To run pipeline stages or test scripts, always activate the Conda environment first and set the python path:
+
+Always activate the conda environment and set `PYTHONPATH` before running any script:
+
 ```powershell
-# Activate the environment
+# Step 1: Activate the conda environment
 conda activate financial_risk_intelligence
 
-# Execute tests or pipeline entrypoints from the root with PYTHONPATH
-$env:PYTHONPATH="."
+# Step 2: From the project root, set PYTHONPATH and run
+$env:PYTHONPATH = "."
 python tests/unit/validation_pipeline_test.py
+python tests/unit/cleaning_pipeline_test.py
 ```
 
+Or using conda run (no need to activate manually):
+```powershell
+$env:PYTHONPATH = "."; conda run -n financial_risk_intelligence python tests/unit/cleaning_pipeline_test.py
+```
+
+### Known Issues / Gotchas
+
+- **Do NOT use `SELECT *`** when loading from PostgreSQL in this project — the transaction table has 394 columns and will trigger `ArrayMemoryError` on low-RAM machines. Always filter columns at query time using `SELECTED_FEATURES_TO_KEEP`.
+- **`TransactionDT` is NOT a real timestamp** — it is a timedelta in seconds from an unknown reference point. Never parse it as a datetime.
+- **`addr1`/`addr2`** have high NaN rates that are disproportionately fraud (~37%). Do NOT drop them — extract `addr1_missing` / `addr2_missing` binary flags instead in `feature_engineering_pipeline.py`.
+
 ### Next Steps & Tasks
-- [ ] **Implement `cleaning_pipeline.py`**: Retrieve raw postgres data, handle missing values, map datatypes, and serialize the cleaned data into `cleaned.parquet`.
-- [ ] **Implement `feature_engineering_pipeline.py`**: Design and extract transaction behavioral features, amounts, emails, and device features.
-- [ ] **Implement `dataset_builder_pipeline.py`**: Prepare dataset splits (group-aware).
+
+- [ ] **Complete `cleaning_pipeline.py`**: Implement `_filling_missing_values()` — per-column fill strategies (median for numeric, mode for categorical), extract `addr1_missing` / `addr2_missing` flags, and save final output to `dataset/processed/cleaned.parquet`.
+- [ ] **Fix remaining ruff lint warnings**:
+  - Move `select = [...]` to `[tool.ruff.lint]` in `pyproject.toml`.
+  - Shorten long line in `tests/unit/logging_testing.py`.
+- [ ] **Implement `feature_engineering_pipeline.py`**: Build behavioral, temporal, email-domain, and device features on top of `cleaned.parquet`.
+- [ ] **Implement `dataset_builder_pipeline.py`**: Group-aware train/val/test split using `StratifiedGroupKFold`, encode categoricals, scale numerics, write `train.parquet`, `validation.parquet`, `test.parquet`.
