@@ -9,8 +9,8 @@ error_status = False
 
 logging.info("Starting the logging test")
 print(
-    "Hello this is the logging unit test checks if the logging is running correct "
-    "in cmd or in folder `logs/test_logging`"
+    "Hello this is the logging unit test checks if the logging is running "
+    "correct in cmd or in folder `logs/test_logging`"
 )
 logging.info("Output is correct printed")
 
