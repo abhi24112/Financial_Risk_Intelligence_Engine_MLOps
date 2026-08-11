@@ -42,11 +42,19 @@ class CleaningPipeline:
             self._validate_database_connection()
             trans_df = self._load_transaction_data()
             iden_df = self._load_identity_data()
+            df_import_status = True
+
+            # Downcast before merge to save memory
+            trans_df = self._downcast_datatypes(trans_df)
+            iden_df = self._downcast_datatypes(iden_df)
+            is_downcasted = True
 
             # Merge the dataframes
             self.logger.info("Merging transaction and identity data...")
             trans_len = len(trans_df)
             df = trans_df.merge(iden_df, how="left", on="TransactionID")
+            total_rows = len(df)
+            duplicates_count = df.duplicated().sum()
 
             # Free up memory immediately after merge
             del trans_df
@@ -63,11 +71,27 @@ class CleaningPipeline:
                 )
 
             df = self._drop_columns(df)
+            df = self._normalize_strings(df)
+            df = self._remove_invalid_data(df)
+            rowcount_after_drop = len(df)
+
+            self._save_processed_data(df)
+
+            # report creationg
+            self.report_data = {
+                "DataFrame_import_status": df_import_status,
+                "total_rows": total_rows,
+                "duplicates_count": duplicates_count,
+                "isDowncasted": is_downcasted,
+                "row_count_after_col_drop": rowcount_after_drop,
+                "status": "passed",
+            }
 
             is_valid = True
             return is_valid
         except Exception as e:
             self.logger.exception(f"Cleaning Pipeline failed: {e}")
+            self.report_data = {"status": "error", "error_message": str(e)}
             raise e
 
     # Validating the connection
@@ -121,11 +145,42 @@ class CleaningPipeline:
 
         return df
 
-    # def _filling_missing_values(self) -> pd.DataFrame:
-    #     self.logger.info("-"*30)
-    #     self.logger.info("Filling Missing values")
+    # Down casting for saving memory
+    def _downcast_datatypes(self, df: pd.DataFrame) -> pd.DataFrame:
+        self.logger.info("Downcasting data types to save memory...")
+        float_cols = df.select_dtypes(include=["float64"]).columns
+        int_cols = df.select_dtypes(include=["int64"]).columns
 
-    #     try:
+        df[float_cols] = df[float_cols].astype("float32")
+        df[int_cols] = df[int_cols].astype("int32")
+        self.logger.info(f"Downcasted {len(float_cols)} float64 and {len(int_cols)} int64 columns.")
+        return df
 
-    #     except Exception as e:
-    #        raise e
+    # removing leading and trailing spaces.
+    def _normalize_strings(self, df: pd.DataFrame) -> pd.DataFrame:
+        self.logger.info("Normalizing string columns...")
+        for col in df.columns:
+            if df[col].dtype == "object":
+                df[col] = df[col].str.strip().str.lower()
+        return df
+
+    # removing invalid TransactionAmt
+    def _remove_invalid_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        self.logger.info("Filtering out invalid records...")
+        if "TransactionAmt" in df.columns:
+            invalid_amt_mask = df["TransactionAmt"] <= 0
+            invalid_count = invalid_amt_mask.sum()
+            if invalid_count > 0:
+                self.logger.info(f"Removing {invalid_count} records with TransactionAmt <= 0")
+                df = df[~invalid_amt_mask]
+        return df
+
+    # Saving cleaned datain .parquet file
+    def _save_processed_data(self, df: pd.DataFrame) -> None:
+        processed_dir = constants.INTERIM_DATASET_DIR
+        os.makedirs(processed_dir, exist_ok=True)
+
+        output_path = os.path.join(processed_dir, "cleaned.parquet")
+        self.logger.info(f"Saving cleaned dataset to {output_path}...")
+        df.to_parquet(output_path, index=False)
+        self.logger.info("Dataset successfully saved.")

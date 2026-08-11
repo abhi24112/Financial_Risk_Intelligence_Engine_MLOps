@@ -3,6 +3,7 @@ DEFAULT_CHUNK_SIZE = 50_000
 
 # Data
 RAW_DATASET_DIR = "dataset/raw"
+INTERIM_DATASET_DIR = "dataset/interim"
 PROCESSED_DATASET_DIR = "dataset/processed"
 
 TRANSACTION_FILE = "transaction_raw.csv"
