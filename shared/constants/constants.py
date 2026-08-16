@@ -8,6 +8,7 @@ PROCESSED_DATASET_DIR = "dataset/processed"
 
 TRANSACTION_FILE = "transaction_raw.csv"
 IDENTITY_FILE = "identity_raw.csv"
+CLEANED_DATA_FILE = "cleaned.parquet"
 
 # Tables
 TRANSACTION_TABLE = "transaction_raw"
