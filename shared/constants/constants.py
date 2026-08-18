@@ -9,6 +9,10 @@ PROCESSED_DATASET_DIR = "dataset/processed"
 TRANSACTION_FILE = "transaction_raw.csv"
 IDENTITY_FILE = "identity_raw.csv"
 CLEANED_DATA_FILE = "cleaned.parquet"
+PROCESSED_DATA_FILE = "features.parquet"
+TRAIN_DATA_FILE = "train.parquet"
+TEST_DATA_FILE = "test.parquet"
+VAL_DATA_FILE = "val.parquet"
 
 # Tables
 TRANSACTION_TABLE = "transaction_raw"
@@ -27,6 +31,8 @@ LOG_LEVEL = "INFO"
 PIPELINE_NAME = "Transaction Risk Intelligence Engine"
 
 # Cleaning Pipeline - Feature Selection
+TARGET_FEATURE = "isFraud"
+
 DROP_TRANSACTION_COLUMNS = [
     "card4",
     "M1",

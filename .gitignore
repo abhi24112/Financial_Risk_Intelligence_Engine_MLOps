@@ -9,3 +9,5 @@ dataset/train_identity.csv
 logs
 
 __pycache__
+
+test.ipynb
