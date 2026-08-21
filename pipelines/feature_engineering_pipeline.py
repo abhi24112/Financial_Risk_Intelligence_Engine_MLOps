@@ -1,16 +1,16 @@
-import json
-import logging
 import os
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
+from pipelines.base_pipeline import BasePipeline
 from shared import configure_logging, constants
 
 configure_logging(log_file="feature_engineering.log")
 
 
-class FeatureEngineeringPipeline:
+class FeatureEngineeringPipeline(BasePipeline):
     """
     Pipeline to do feature engineering by adding feature and
     adding missiness significance features.
@@ -21,48 +21,36 @@ class FeatureEngineeringPipeline:
         - Adding new feature to the data.
     """
 
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-        self.report_dir = "dataset/feature_engineering_report"
-        os.makedirs(self.report_dir, exist_ok=True)
-        self.report_path = os.path.join(self.report_dir, "feature_engineering_report.json")
-        self.report_data = {}
+    def __init__(self, config: dict[str, Any] | None = None):
+        super().__init__(config)
 
-    def run(self) -> pd.DataFrame:
-        self.logger.info("Starting Feature Engineering Pipeline")
-        try:
-            df = self._load_cleaned_parquet()
-            original_cols = set(df.columns)
+    def _execute(self) -> dict[str, Any]:
+        df = self._load_cleaned_parquet()
+        original_cols = set(df.columns)
 
-            self.logger.info("Sorting by TransactionDT to prevent temporal leakage...")
-            df = df.sort_values("TransactionDT").reset_index(drop=True)
+        self.logger.info("Sorting by TransactionDT to prevent temporal leakage...")
+        df = df.sort_values("TransactionDT").reset_index(drop=True)
 
-            df = self._handle_missing_values(df)
-            df = self._add_temporal_features(df)
-            df = self._add_amount_features(df)
-            df = self._create_uids(df)
-            df = self._add_behavioral_stats(df)
-            df = self._add_velocity_and_time_features(df)
-            df = self._add_novelty_features(df)
+        df = self._handle_missing_values(df)
+        df = self._add_temporal_features(df)
+        df = self._add_amount_features(df)
+        df = self._create_uids(df)
+        df = self._add_behavioral_stats(df)
+        df = self._add_velocity_and_time_features(df)
+        df = self._add_novelty_features(df)
 
-            self._save_features(df)
+        self._save_features(df)
 
-            new_cols = list(set(df.columns) - original_cols)
-            self.report_data = {
-                "status": "passed",
+        new_cols = list(set(df.columns) - original_cols)
+
+        return {
+            "metadata": {
                 "total_rows": len(df),
                 "total_features": len(df.columns),
                 "new_features_created": len(new_cols),
                 "new_features_list": new_cols,
             }
-            self._generate_report()
-
-            return df
-        except Exception as e:
-            self.logger.exception(f"Feature Engineering Pipeline failed: {e}")
-            self.report_data = {"status": "error", "error_message": str(e)}
-            self._generate_report()
-            raise e
+        }
 
     # Loading cleaned parquet file
     def _load_cleaned_parquet(self) -> pd.DataFrame:
@@ -183,9 +171,3 @@ class FeatureEngineeringPipeline:
         self.logger.info(f"Saving engineered features to {output_path}...")
         df.to_parquet(output_path, index=False)
         self.logger.info("Features successfully saved.")
-
-    def _generate_report(self) -> None:
-        self.logger.info(f"Generating pipeline report at {self.report_path}...")
-        with open(self.report_path, "w") as f:
-            json.dump(self.report_data, f, indent=4)
-        self.logger.info("Report generated successfully.")

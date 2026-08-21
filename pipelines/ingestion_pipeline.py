@@ -1,14 +1,15 @@
 # logging setup
-import logging
+from typing import Any
 
 from database.connection import Database
 from database.loader import CSVLoader
+from pipelines.base_pipeline import BasePipeline
 from shared import configure_logging, constants
 
-configure_logging(log_file="pipeline.log")
+configure_logging(log_file="ingestion_pipeline.log")
 
 
-class IngestionPipeline:
+class IngestionPipeline(BasePipeline):
     """
     Pipeline responsible for ingesting raw CSV datasets
     into the PostgreSQL database.
@@ -16,28 +17,18 @@ class IngestionPipeline:
     Responsibilities:
         - Verify database connectivity
         - Load raw datasets into PostgreSQL
-        - Log pipeline execution
     """
 
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
+    def __init__(self, config: dict[str, Any] | None = None):
+        super().__init__(config)
         self.database = Database()
         self.loader = CSVLoader(self.database)
 
-    def run(self) -> bool:
-        self.logger.info("=" * 60)
-        self.logger.info("Starting Ingestion Pipeline")
+    def _execute(self) -> dict[str, Any]:
+        self._validate_database_connection()
+        self._load_raw_data()
 
-        try:
-            self._validate_database_connection()
-            self._load_raw_data()
-
-            self.logger.info("Ingestion Pipeline completed successfully.")
-            return True
-
-        except Exception as e:
-            self.logger.exception(f"Ingestion Pipeline failed: {e}")
-            return False
+        return {"metadata": {"tables_loaded": len(constants.FILES_TO_TABLES)}}
 
     # Testing Database connection
     def _validate_database_connection(self) -> None:

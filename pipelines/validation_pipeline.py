@@ -1,16 +1,15 @@
-import json
-import logging
-import os
+from typing import Any
 
 import pandas as pd
 
 from database.connection import Database
+from pipelines.base_pipeline import BasePipeline
 from shared import configure_logging, constants
 
 configure_logging(log_file="validation.log")
 
 
-class ValidationPipeline:
+class ValidationPipeline(BasePipeline):
     """
     Pipeline responsible for validating raw datasets
     in the PostgreSQL database.
@@ -19,46 +18,36 @@ class ValidationPipeline:
         - Check for missing primary keys
         - Check for duplicate primary keys
         - Validate essential columns
-        - Generate validation report
-        - Stop the DAG on failure (returns False)
+        - Stop the DAG on failure
     """
 
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
+    def __init__(self, config: dict[str, Any] | None = None):
+        super().__init__(config)
         self.database = Database()
-        self.report_dir = "dataset/validation_reports"
-        os.makedirs(self.report_dir, exist_ok=True)
-        self.report_path = os.path.join(self.report_dir, "validation_report.json")
         self.report_data = {}
 
-    def run(self) -> bool:
-        self.logger.info("=" * 60)
-        self.logger.info("Starting Validation Pipeline")
+    def _execute(self) -> dict[str, Any]:
+        self._validate_database_connection()
 
-        try:
-            self._validate_database_connection()
+        is_valid = True
 
-            # Run validations
-            is_valid = True
+        if not self._validate_transactions():
+            is_valid = False
 
-            if not self._validate_transactions():
-                is_valid = False
+        if not self._validate_identity():
+            is_valid = False
 
-            if not self._validate_identity():
-                is_valid = False
+        if not is_valid:
+            # We raise an error so BasePipeline marks it as 'failed'
+            # but we still want to attach the partial report data?
+            # BasePipeline currently captures exceptions. If we want metadata on failure,
+            # we might just return normally but maybe the orchestrator handles it.
+            # But according to GEMINI.md, validation stops the DAG on failure.
+            raise ValueError(
+                f"Validation failed due to data quality issues. Details: {self.report_data}"
+            )
 
-            self._save_report()
-
-            if is_valid:
-                self.logger.info("Validation Pipeline completed successfully.")
-                return True
-            else:
-                self.logger.error("Validation Pipeline failed due to data quality issues.")
-                return False
-
-        except Exception as e:
-            self.logger.exception(f"Validation Pipeline failed: {e}")
-            return False
+        return {"metadata": self.report_data}
 
     def _validate_database_connection(self) -> None:
         self.logger.info("Testing Database connection")
@@ -195,11 +184,3 @@ class ValidationPipeline:
             self.logger.error(f"Error validating {table_name}: {e}")
             self.report_data[table_name] = {"status": "error", "error_message": str(e)}
             return False
-
-    def _save_report(self) -> None:
-        self.logger.info(f"Saving validation report to {self.report_path}")
-        try:
-            with open(self.report_path, "w") as f:
-                json.dump(self.report_data, f, indent=4)
-        except Exception as e:
-            self.logger.error(f"Failed to save validation report: {e}")

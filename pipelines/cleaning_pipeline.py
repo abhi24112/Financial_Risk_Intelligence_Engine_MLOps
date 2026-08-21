@@ -1,15 +1,16 @@
-import logging
 import os
+from typing import Any
 
 import pandas as pd
 
 from database.connection import Database
+from pipelines.base_pipeline import BasePipeline
 from shared import configure_logging, constants
 
 configure_logging(log_file="cleaning.log")
 
 
-class CleaningPipeline:
+class CleaningPipeline(BasePipeline):
     """
     Pipeline responsible for cleaning raw data
     and saving cleaned data as Parquet.
@@ -22,77 +23,61 @@ class CleaningPipeline:
         - Save cleaned data as Parquet
     """
 
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
+    def __init__(self, config: dict[str, Any] | None = None):
+        super().__init__(config)
         self.database = Database()
-        self.report_dir = "dataset/cleaning_report"
-        os.makedirs(self.report_dir, exist_ok=True)
-        self.report_path = os.path.join(self.report_dir, "cleaning_report.json")
         self.trans_table_name = constants.TRANSACTION_TABLE
         self.iden_table_name = constants.IDENTITY_TABLE
-        self.report_data = {}
 
-    def run(self) -> bool:
-        self.logger.info("=" * 60)
-        self.logger.info("Starting Data Cleaning Pipeline")
-        self.logger.info("=" * 60)
+    def _execute(self) -> dict[str, Any]:
+        self._validate_database_connection()
+        trans_df = self._load_transaction_data()
+        iden_df = self._load_identity_data()
+        df_import_status = True
 
-        try:
+        # Downcast before merge to save memory
+        trans_df = self._downcast_datatypes(trans_df)
+        iden_df = self._downcast_datatypes(iden_df)
+        is_downcasted = True
 
-            self._validate_database_connection()
-            trans_df = self._load_transaction_data()
-            iden_df = self._load_identity_data()
-            df_import_status = True
+        # Merge the dataframes
+        self.logger.info("Merging transaction and identity data...")
+        trans_len = len(trans_df)
+        df = trans_df.merge(iden_df, how="left", on="TransactionID")
+        total_rows = len(df)
+        duplicates_count = int(df.duplicated().sum())
 
-            # Downcast before merge to save memory
-            trans_df = self._downcast_datatypes(trans_df)
-            iden_df = self._downcast_datatypes(iden_df)
-            is_downcasted = True
+        # Free up memory immediately after merge
+        del trans_df
+        del iden_df
+        import gc
 
-            # Merge the dataframes
-            self.logger.info("Merging transaction and identity data...")
-            trans_len = len(trans_df)
-            df = trans_df.merge(iden_df, how="left", on="TransactionID")
-            total_rows = len(df)
-            duplicates_count = df.duplicated().sum()
+        gc.collect()
 
-            # Free up memory immediately after merge
-            del trans_df
-            del iden_df
-            import gc
+        # Verifying that merge has not increased the row count
+        if len(df) != trans_len:
+            raise ValueError(
+                "Merge increased transaction row count. "
+                "TransactionID may not be unique in identity_raw."
+            )
 
-            gc.collect()
+        df = self._drop_columns(df)
+        df = self._normalize_strings(df)
+        df = self._remove_invalid_data(df)
+        rowcount_after_drop = len(df)
 
-            # Verifying that merge has not increased the row count
-            if len(df) != trans_len:
-                raise ValueError(
-                    "Merge increased transaction row count. "
-                    "TransactionID may not be unique in identity_raw."
-                )
+        self._save_processed_data(df)
 
-            df = self._drop_columns(df)
-            df = self._normalize_strings(df)
-            df = self._remove_invalid_data(df)
-            rowcount_after_drop = len(df)
-
-            self._save_processed_data(df)
-
-            # report creationg
-            self.report_data = {
+        # Return metadata to the BasePipeline
+        return {
+            "metadata": {
                 "DataFrame_import_status": df_import_status,
                 "total_rows": total_rows,
                 "duplicates_count": duplicates_count,
                 "isDowncasted": is_downcasted,
                 "row_count_after_col_drop": rowcount_after_drop,
-                "status": "passed",
             }
-
-            is_valid = True
-            return is_valid
-        except Exception as e:
-            self.logger.exception(f"Cleaning Pipeline failed: {e}")
-            self.report_data = {"status": "error", "error_message": str(e)}
-            raise e
+        }
 
     # Validating the connection
     def _validate_database_connection(self) -> None:
