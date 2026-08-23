@@ -1,0 +1,23 @@
+{
+    "pipeline_name": "ValidationPipeline",
+    "status": "success",
+    "started_at": "2026-08-21T20:18:52.260431+00:00",
+    "finished_at": "2026-08-21T20:18:55.034837+00:00",
+    "artifacts": {},
+    "metadata": {
+        "transaction_raw": {
+            "total_rows": 590540,
+            "duplicates_count": 0,
+            "null_transaction_ids": 0,
+            "null_isfraud": 0,
+            "status": "passed"
+        },
+        "identity_raw": {
+            "total_rows": 144233,
+            "duplicates_count": 0,
+            "null_transaction_ids": 0,
+            "status": "passed"
+        }
+    },
+    "error": null
+}
