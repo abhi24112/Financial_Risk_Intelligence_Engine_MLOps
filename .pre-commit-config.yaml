@@ -9,4 +9,3 @@ repos:
     rev: 24.4.0
     hooks:
       - id: black
-        args: [--check]

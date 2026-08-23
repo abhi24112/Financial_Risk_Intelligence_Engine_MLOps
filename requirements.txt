@@ -9,16 +9,17 @@ matplotlib
 seaborn
 
 # Models
+lightgbm
+xgboost
+optuna
 
 # Database
+scikit-learn
 sqlalchemy 
 psycopg2-binary
 
-# Sklearn
-scikit-learn
-
 # MLOps
-
+mlflow
 
 # Linting
 pre-commit

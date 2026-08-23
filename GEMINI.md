@@ -39,7 +39,7 @@ depth are prioritized over model count or dataset count.
 ## 2. What The System Does (Functional Requirements)
 
 For every incoming transaction, the system:
-1. Calculates a **risk score** (0–100)
+1. Calculates a **risk score** (0–100) **within a strict <100ms latency SLA**
 2. Assigns a **risk level** (Low / Medium / High)
 3. Classifies **Anomalous vs Normal**
 4. **Explains why** the transaction was flagged — using SHAP-driven,
@@ -122,9 +122,10 @@ Output: risk score (0–100), risk level (Low/Med/High), anomalous/normal flag.
 
 ## 5. Architecture Decisions (already made — don't relitigate without reason)
 
+- **Latency SLA:** The `/predict` API must return a score in <100ms. To achieve this, it relies on an Online Feature Store (Redis) for O(1) feature lookups, bypassing PostgreSQL during inference.
 - IEEE-CIS only for V1; future datasets are additive, not required.
 - Model may see all features; explanations may not.
-- Prediction and explanation are decoupled services/pipelines.
+- **Decoupled Explainability:** SHAP computation is too slow for the 100ms SLA. Prediction and explanation are hard-decoupled. The `/predict` endpoint returns instantly; the `/explain` endpoint runs separately (or async).
 - **Champion/Challenger** model promotion strategy for retraining, not blind
   auto-replace.
 - Data drift monitoring (Evidently AI) triggers retraining; retraining is not
@@ -154,8 +155,9 @@ Output: risk score (0–100), risk level (Low/Med/High), anomalous/normal flag.
 | Cache | Redis | low-latency feature/prediction serving |
 | Monitoring | Evidently AI | data drift, prediction drift, feature distribution |
 | Containerization | Docker, Docker Compose | local + prod parity |
-| Orchestrated deploy | Kubernetes (kind/minikube locally; optional AWS) | serving at scale |
-| IaC | Terraform | AWS resources (S3, ECR, RDS, IAM, networking) |
+| Orchestrated deploy | AWS ECS (Fargate) or EKS | serving at scale with low latency |
+| IaC | Terraform | AWS resources (ECS/EKS, ElastiCache Redis, RDS, VPC) |
+| Streaming | **None (No Kafka)** | Intentional exclusion to focus on synchronous <100ms REST SLA without over-engineering |
 | CI/CD | GitHub Actions | test → build → push image → deploy |
 
 **Rule:** don't add a technology unless it maps to a concrete need above.
@@ -410,63 +412,47 @@ This section lists the implemented tasks and what needs to be worked on next, so
 1. **Database Setup**: Completed. Raw transactions loaded into PostgreSQL (`fraud_risk` DB, user `fraud_user`).
 
 2. **Ingestion Pipeline (`pipelines/ingestion_pipeline.py`)**: ✅ Complete.
-   - Loads `transaction_raw.csv` and `identity_raw.csv` from `dataset/raw/` into PostgreSQL tables `transaction_raw` and `identity_raw`.
-   - Verified working with test runner.
+   - Loads raw CSVs into PostgreSQL. Verified working.
 
-3. **Validation Pipeline (`pipelines/validation_pipeline.py`)**: ✅ Complete.
-   - Validates data in PostgreSQL: empty table checks, NULL primary keys, NULL `isFraud` target, duplicate `TransactionID` checks.
-   - Generates `dataset/validation_reports/validation_report.json`.
-   - Both tables passed: `transaction_raw` (590,540 rows) and `identity_raw` (144,233 rows).
-   - Verified working with `tests/unit/validation_pipeline_test.py`.
+3. **Validation & Cleaning Pipelines**: ✅ Complete.
+   - Schema checks, downcasting, column dropping (retaining `SELECTED_FEATURES_TO_KEEP`), and missing value imputation done.
 
-4. **Cleaning Pipeline (`pipelines/cleaning_pipeline.py`)**: ✅ Complete (partial — column dropping done, missing value handling still TODO).
-   - Loads only the required columns (`SELECTED_FEATURES_TO_KEEP` from constants) at query time — avoids loading all 394 columns.
-   - Reads data in chunks of 50,000 rows and downcasts `float64` → `float32` to prevent `ArrayMemoryError` on systems with limited RAM.
-   - Merges `transaction_raw` + `identity_raw` on `TransactionID` (left join) and verifies row count is unchanged post-merge.
-   - Drops the 149 columns not in the keep-list.
-   - Frees intermediate DataFrames immediately post-merge using `del` + `gc.collect()`.
-   - Verified working: 590,540 rows × 285 columns after drop.
-   - **Remaining TODO**: `_filling_missing_values()` method (currently commented out) — fill NaNs per column strategy, extract `addr1_missing`/`addr2_missing` flags, save cleaned output to `dataset/processed/cleaned.parquet`.
+4. **Feature Engineering & Dataset Builder**: ✅ Complete.
+   - Engineered behavioral features and successfully built `train.parquet`, `val.parquet`, and `test.parquet` using `StratifiedGroupKFold` to prevent user leakage.
 
-5. **Bug Fixes & Infrastructure**:
-   - **Circular import fix** (`shared/logging/logging_config.py`): Changed `from shared import constants` → `from shared.constants import constants` to avoid the logger module importing from an uninitialized `shared` package.
-   - **Log file override fix** (`shared/logging/logging_config.py`): Added `force=True` to `logging.basicConfig()` so each pipeline can reconfigure the root logger to its own log file (e.g., `cleaning.log`) even when another module has already initialized logging.
-   - **Ruff linting fixes**:
-     - `database/connection.py` E402: Moved `from sqlalchemy import create_engine, text` above the `configure_logging()` call.
-     - `shared/__init__.py` F403/F405: Replaced `from shared.logging.logging_config import *` with explicit `from shared.logging.logging_config import configure_logging`.
-     - `pyproject.toml` deprecation warning: `select` should be moved to `[tool.ruff.lint]` section — **still TODO**.
-     - `tests/unit/logging_testing.py` E501: Line too long — **still TODO** (user denied write permission last time).
+5. **Training Pipeline (`pipelines/training_pipeline.py`)**: ✅ Complete.
+   - Implemented `ModelTrainer` supporting XGBoost, LightGBM, and Random Forest.
+   - Integrates deeply with MLflow (`sqlite:///mlflow.db`) to track all parameters.
+   - Fixes LightGBM `skops_trusted_types` issues.
+
+6. **Evaluation Pipeline (`pipelines/evaluation_pipeline.py`)**: ✅ Complete.
+   - Dynamically reads `run_id` from the training report, predicts on the test set, and logs business metrics (PR-AUC, Recall, F1, Confusion Matrix) *into the exact same MLflow run*.
+
+7. **Experimentation & Tuning Scripts**: ✅ Complete.
+   - `scripts/run_experiments.py`: Loops over all baselines and ranks them by PR-AUC.
+   - `scripts/tune.py`: Uses **Optuna** to independently hyperparameter-tune XGBoost, LightGBM, and Random Forest with clean `tqdm` progress bars.
 
 ### Running Pipeline Scripts / Tests
 
 Always activate the conda environment and set `PYTHONPATH` before running any script:
 
 ```powershell
-# Step 1: Activate the conda environment
 conda activate financial_risk_intelligence
-
-# Step 2: From the project root, set PYTHONPATH and run
 $env:PYTHONPATH = "."
-python tests/unit/validation_pipeline_test.py
-python tests/unit/cleaning_pipeline_test.py
-```
 
-Or using conda run (no need to activate manually):
-```powershell
-$env:PYTHONPATH = "."; conda run -n financial_risk_intelligence python tests/unit/cleaning_pipeline_test.py
+# Run tuning on LightGBM for 20 trials
+python scripts/tune.py --model lightgbm --trials 20
 ```
 
 ### Known Issues / Gotchas
 
-- **Do NOT use `SELECT *`** when loading from PostgreSQL in this project — the transaction table has 394 columns and will trigger `ArrayMemoryError` on low-RAM machines. Always filter columns at query time using `SELECTED_FEATURES_TO_KEEP`.
-- **`TransactionDT` is NOT a real timestamp** — it is a timedelta in seconds from an unknown reference point. Never parse it as a datetime.
-- **`addr1`/`addr2`** have high NaN rates that are disproportionately fraud (~37%). Do NOT drop them — extract `addr1_missing` / `addr2_missing` binary flags instead in `feature_engineering_pipeline.py`.
+- **Do NOT use `SELECT *`** when loading from PostgreSQL in this project — the transaction table has 394 columns and will trigger `ArrayMemoryError` on low-RAM machines.
+- **MLflow Tracking Backend**: We use `sqlite:///mlflow.db` because `./mlruns` is deprecated by MLflow for UI usage.
+- **PR-AUC Baseline**: In this dataset, fraud prevalence is ~3.5%. Therefore, a PR-AUC of `0.035` is random guessing. A score of `0.45+` is considered extremely strong. Always prioritize Recall (True Positives) over raw Accuracy.
 
 ### Next Steps & Tasks
 
-- [ ] **Complete `cleaning_pipeline.py`**: Implement `_filling_missing_values()` — per-column fill strategies (median for numeric, mode for categorical), extract `addr1_missing` / `addr2_missing` flags, and save final output to `dataset/processed/cleaned.parquet`.
-- [ ] **Fix remaining ruff lint warnings**:
-  - Move `select = [...]` to `[tool.ruff.lint]` in `pyproject.toml`.
-  - Shorten long line in `tests/unit/logging_testing.py`.
-- [ ] **Implement `feature_engineering_pipeline.py`**: Build behavioral, temporal, email-domain, and device features on top of `cleaned.parquet`.
-- [ ] **Implement `dataset_builder_pipeline.py`**: Group-aware train/val/test split using `StratifiedGroupKFold`, encode categoricals, scale numerics, write `train.parquet`, `validation.parquet`, `test.parquet`.
+- [ ] **Lock the Champion Model**: Review Optuna MLflow logs, pick the absolute best model (balancing PR-AUC and Recall), update `configs/model.yaml` with its parameters, and train the official final model.
+- [ ] **Registration Pipeline (`pipelines/registration_pipeline.py`)**: Formally promote the champion model into the MLflow Model Registry (so the API can pull the "Production" tag).
+- [ ] **Explainability Pipeline (`pipelines/explainability_pipeline.py`)**: Implement SHAP to generate human-readable reasons for fraud flags (e.g., "Transaction amount is 4.2x customer average"). Must be decoupled from raw prediction.
+- [ ] **FastAPI Serving (`api/`)**: Build the `/predict` endpoint. **Crucial Rule:** It must return a risk score in `<100ms`. We will need to design an Online Feature Store (Redis) to bypass PostgreSQL for inference lookups.

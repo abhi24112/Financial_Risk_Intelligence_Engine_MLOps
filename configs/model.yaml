@@ -1,0 +1,17 @@
+# configs/model.yaml
+
+experiment_name: "Fraud_Detection_Training"
+mlflow_tracking_uri: "sqlite:///mlflow.db"  # Use SQLite as local file store is deprecated by MLflow
+
+model:
+  # Supported types: "xgboost", "lightgbm", "random_forest"
+  model_type: "xgboost"
+  
+  # Hyperparameters that map directly to the chosen model
+  model_params:
+    max_depth: 5
+    learning_rate: 0.05
+    n_estimators: 150
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42

@@ -18,11 +18,15 @@ VAL_DATA_FILE = "val.parquet"
 TRANSACTION_TABLE = "transaction_raw"
 IDENTITY_TABLE = "identity_raw"
 
+# Model directory
+MODELS_DIR = "models"
+
 # Dictionary file name and cona
 FILES_TO_TABLES = {
     "dataset/raw/transaction_raw.csv": "transaction_raw",
     "dataset/raw/identity_raw.csv": "identity_raw",
 }
+
 # Logging
 LOG_DIR = "logs"
 LOG_LEVEL = "INFO"

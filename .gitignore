@@ -1,13 +1,86 @@
-.vscode
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.coverage
+.coverage.*
+htmlcov/
 
+# Virtual environments and local environment files
+.venv/
+venv/
+env/
+ENV/
 .env
+.env.*
+!.env.example
 
-dataset
-dataset/train_transaction.csv
-dataset/train_identity.csv
+# Local IDE and OS files
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+Desktop.ini
 
-logs
+# Logs and local runtime output
+logs/
+*.log
 
-__pycache__
+# Raw and generated datasets. Keep reports and data-versioning metadata tracked.
+dataset/raw/
+dataset/interim/
+dataset/processed/
+dataset/*.csv
+dataset/*.parquet
+dataset/*.feather
+dataset/*.pkl
+dataset/*.pickle
+!dataset/reports/
+!dataset/reports/**
+!dataset/**/*.dvc
 
+# Trained models and generated model artifacts
+models/
+*.joblib
+*.pkl
+*.pickle
+*.onnx
+*.pt
+*.pth
+
+# MLflow local tracking store and artifacts
+mlruns/
+mlflow.db
+mlflow.db-*
+
+# Local databases and generated exports
+*.db
+*.sqlite
+*.sqlite3
+*.parquet
+*.feather
+
+# Jupyter generated files and checkpoints
+.ipynb_checkpoints/
+
+# Build, packaging, and distribution artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+poetry.lock
+
+# Type-checker and test tooling artifacts
+.tox/
+.nox/
+*.pytype/
+ruff-report.json
+
+# test files
 test.ipynb
