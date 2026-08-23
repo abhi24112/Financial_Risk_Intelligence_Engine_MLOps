@@ -17,8 +17,7 @@ class ModelTrainer:
     """
     Core ML logic for training fraud detection models.
     Supports toggling between different architectures via configuration.
-    Handles algorithm-specific needs (e.g., encoding for Random Forest,
-    native categories for Trees).
+    Handles algorithm-specific needs (e.g., encoding for Random Forest, native categories for Trees).
     """
 
     def __init__(self, config: dict[str, Any]):
@@ -88,28 +87,17 @@ class ModelTrainer:
 
             # Random Forest REQUIRES ordinal encoding for categories
             if len(cat_cols) > 0:
-                self.logger.info(
-                    f"Adding OrdinalEncoder for {len(cat_cols)} categorical "
-                    "columns for Random Forest."
-                )
-                # handle_unknown='use_encoded_value' ensures unseen test
-                # categories don't crash the pipeline
+                self.logger.info(f"Adding OrdinalEncoder for {len(cat_cols)} categorical columns for Random Forest.")
+                # handle_unknown='use_encoded_value' ensures unseen test categories don't crash the pipeline
                 encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
-                preprocessor = ColumnTransformer(
-                    transformers=[("cat", encoder, cat_cols)], remainder="passthrough"
-                )
+                preprocessor = ColumnTransformer(transformers=[("cat", encoder, cat_cols)], remainder="passthrough")
                 return Pipeline(steps=[("preprocessor", preprocessor), ("model", model)])
             else:
                 return Pipeline(steps=[("model", model)])
         else:
-            raise ValueError(
-                f"Unsupported model_type: {self.model_type}. Choose from: "
-                "xgboost, lightgbm, random_forest"
-            )
+            raise ValueError(f"Unsupported model_type: {self.model_type}. Choose from: xgboost, lightgbm, random_forest")
 
-    def train(
-        self, X_train: pd.DataFrame, y_train: pd.Series, X_val: pd.DataFrame, y_val: pd.Series
-    ) -> Pipeline:
+    def train(self, X_train: pd.DataFrame, y_train: pd.Series, X_val: pd.DataFrame, y_val: pd.Series) -> Pipeline:
         """
         Executes model training with optional evaluation monitoring.
         """
