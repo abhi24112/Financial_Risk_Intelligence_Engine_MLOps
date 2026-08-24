@@ -24,7 +24,6 @@ def objective(trial, base_config, model_type):
             "n_estimators": trial.suggest_int("n_estimators", 50, 300),
             "subsample": trial.suggest_float("subsample", 0.6, 1.0),
             "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
-            "random_state": 42,
         }
     elif model_type == "lightgbm":
         model_params = {
@@ -33,14 +32,12 @@ def objective(trial, base_config, model_type):
             "n_estimators": trial.suggest_int("n_estimators", 50, 300),
             "num_leaves": trial.suggest_int("num_leaves", 20, 150),
             "subsample": trial.suggest_float("subsample", 0.6, 1.0),
-            "random_state": 42,
         }
     elif model_type == "random_forest":
         model_params = {
             "max_depth": trial.suggest_int("max_depth", 5, 20),
             "n_estimators": trial.suggest_int("n_estimators", 50, 200),
             "min_samples_split": trial.suggest_int("min_samples_split", 2, 10),
-            "random_state": 42,
             "n_jobs": -1,
         }
     else:
@@ -83,7 +80,7 @@ def main():
     base_config = load_config("model.yaml")
 
     models_to_tune = ["xgboost", "lightgbm", "random_forest"]
-    num_trials = 5  # You can change this to 20 or 50 later
+    num_trials = 40  # You can change this to 20 or 50 later
 
     for model_type in models_to_tune:
         logger.info("\n")
