@@ -1,4 +1,4 @@
-# 🛡️ Adaptive Financial Risk Intelligence Engine
+# 🛡️ Adaptive Financial Risk Intelligence Engine (--In Development--)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![MLflow](https://img.shields.io/badge/MLflow-Tracking_%26_Registry-0194E2.svg)](https://mlflow.org/)
