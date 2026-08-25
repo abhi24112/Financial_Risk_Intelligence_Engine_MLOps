@@ -1,19 +1,19 @@
 {
     "pipeline_name": "EvaluationPipeline",
     "status": "success",
-    "started_at": "2026-08-23T18:39:46.830530+00:00",
-    "finished_at": "2026-08-23T18:39:51.390089+00:00",
+    "started_at": "2026-08-24T07:02:35.331069+00:00",
+    "finished_at": "2026-08-24T07:02:38.387058+00:00",
     "artifacts": {},
     "metadata": {
-        "test_roc_auc": 0.8385858728997923,
-        "test_pr_auc": 0.4435230534305901,
-        "test_f1_score": 0.416988416988417,
-        "test_recall": 0.42073170731707316,
-        "test_precision": 0.4133111480865225,
-        "test_true_negatives": 79648,
-        "test_false_positives": 1763,
-        "test_false_negatives": 1710,
-        "test_true_positives": 1242
+        "test_roc_auc": 0.8455919567210559,
+        "test_pr_auc": 0.4073381691531914,
+        "test_f1_score": 0.26445682854454655,
+        "test_recall": 0.6189024390243902,
+        "test_precision": 0.16815462494247585,
+        "test_true_negatives": 72373,
+        "test_false_positives": 9038,
+        "test_false_negatives": 1125,
+        "test_true_positives": 1827
     },
     "error": null
 }

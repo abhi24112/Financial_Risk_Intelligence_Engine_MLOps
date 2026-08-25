@@ -1,12 +1,12 @@
 {
     "pipeline_name": "TrainingPipeline",
     "status": "success",
-    "started_at": "2026-08-23T18:37:34.884481+00:00",
-    "finished_at": "2026-08-23T18:39:46.828523+00:00",
+    "started_at": "2026-08-24T07:01:13.089305+00:00",
+    "finished_at": "2026-08-24T07:02:35.330064+00:00",
     "artifacts": {},
     "metadata": {
         "model_type": "random_forest",
-        "mlflow_run_id": "752239088f0547fe8e98088ffacdce2f",
+        "mlflow_run_id": "96f2cb51d10c4a8eac5f59ec6e89a558",
         "local_model_path": "models\\random_forest.pkl",
         "train_rows": 421816,
         "val_rows": 84361,
