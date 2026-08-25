@@ -20,6 +20,7 @@ psycopg2-binary
 
 # MLOps
 mlflow
+shap
 
 # Linting
 pre-commit

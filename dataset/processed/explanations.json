@@ -1,0 +1,172 @@
+{
+    "3469247": {
+        "top_features": [
+            "D3",
+            "P_emaildomain",
+            "D11"
+        ],
+        "shap_values": [
+            -0.3300104580500268,
+            0.2504372546331525,
+            -0.17490842415208444
+        ],
+        "reasons": [
+            "Behavioral metric 'D3' (Value: 157.0) decreased the risk score.",
+            "Behavioral metric 'P_emaildomain' (Value: missing) increased the risk score.",
+            "Behavioral metric 'D11' (Value: 537.0) decreased the risk score."
+        ]
+    },
+    "3203183": {
+        "top_features": [
+            "TransactionAmt",
+            "M5",
+            "P_emaildomain"
+        ],
+        "shap_values": [
+            0.24772551534405546,
+            0.21281888580165875,
+            0.145250415593296
+        ],
+        "reasons": [
+            "Transaction amount ($226.0) increased the risk score.",
+            "Behavioral metric 'M5' (Value: T) increased the risk score.",
+            "Behavioral metric 'P_emaildomain' (Value: gmail.com) increased the risk score."
+        ]
+    },
+    "3143655": {
+        "top_features": [
+            "TransactionAmt",
+            "card6",
+            "C5"
+        ],
+        "shap_values": [
+            0.8016374408947485,
+            -0.13948994370637158,
+            0.1258104831571197
+        ],
+        "reasons": [
+            "Transaction amount ($834.0) increased the risk score.",
+            "Customer card property 'card6' (Value: debit) decreased the risk score.",
+            "Behavioral metric 'C5' (Value: 0.0) increased the risk score."
+        ]
+    },
+    "3486417": {
+        "top_features": [
+            "TransactionAmt",
+            "D3",
+            "C6"
+        ],
+        "shap_values": [
+            0.47106242763645445,
+            -0.33409830977459387,
+            0.19073827305354502
+        ],
+        "reasons": [
+            "Transaction amount ($295.0) increased the risk score.",
+            "Behavioral metric 'D3' (Value: 193.0) decreased the risk score.",
+            "Behavioral metric 'C6' (Value: 3.0) increased the risk score."
+        ]
+    },
+    "3566273": {
+        "top_features": [
+            "P_emaildomain",
+            "D3",
+            "C2"
+        ],
+        "shap_values": [
+            -0.3303014844236938,
+            0.2075564156657172,
+            0.19939208402706818
+        ],
+        "reasons": [
+            "Behavioral metric 'P_emaildomain' (Value: anonymous.com) decreased the risk score.",
+            "Behavioral metric 'D3' (Value: 2.0) increased the risk score.",
+            "Behavioral metric 'C2' (Value: 4.0) increased the risk score."
+        ]
+    },
+    "3542651": {
+        "top_features": [
+            "TransactionAmt",
+            "amount_last_24h",
+            "C1"
+        ],
+        "shap_values": [
+            -0.24577703110291207,
+            -0.1606442271965779,
+            -0.15165350951202294
+        ],
+        "reasons": [
+            "Transaction amount ($25.0) decreased the risk score.",
+            "Behavioral metric 'amount_last_24h' (Value: 25.0) decreased the risk score.",
+            "Behavioral metric 'C1' (Value: 1.0) decreased the risk score."
+        ]
+    },
+    "3573879": {
+        "top_features": [
+            "card6",
+            "M5",
+            "V312"
+        ],
+        "shap_values": [
+            0.48104385576935405,
+            0.18994500629977887,
+            0.17744415329849286
+        ],
+        "reasons": [
+            "Customer card property 'card6' (Value: credit) increased the risk score.",
+            "Behavioral metric 'M5' (Value: T) increased the risk score.",
+            "Behavioral metric 'V312' (Value: 150.0) increased the risk score."
+        ]
+    },
+    "3443661": {
+        "top_features": [
+            "card3",
+            "identity_avg_amount",
+            "C1"
+        ],
+        "shap_values": [
+            -0.6544130661757418,
+            -0.5661073878575771,
+            -0.4176171002279184
+        ],
+        "reasons": [
+            "Customer card property 'card3' (Value: 106.0) decreased the risk score.",
+            "Behavioral metric 'identity_avg_amount' (Value: 30.77) decreased the risk score.",
+            "Behavioral metric 'C1' (Value: 1.0) decreased the risk score."
+        ]
+    },
+    "3031840": {
+        "top_features": [
+            "C5",
+            "identity_avg_amount",
+            "C13"
+        ],
+        "shap_values": [
+            -0.2065135577228234,
+            -0.15402184772185623,
+            0.14335135430278279
+        ],
+        "reasons": [
+            "Behavioral metric 'C5' (Value: 1.0) decreased the risk score.",
+            "Behavioral metric 'identity_avg_amount' (Value: 100.42) decreased the risk score.",
+            "Behavioral metric 'C13' (Value: 1.0) increased the risk score."
+        ]
+    },
+    "3181002": {
+        "top_features": [
+            "C14",
+            "card6",
+            "C13"
+        ],
+        "shap_values": [
+            1.1134200897710607,
+            0.27262705293680417,
+            0.26392839290982884
+        ],
+        "reasons": [
+            "Behavioral metric 'C14' (Value: 0.0) increased the risk score.",
+            "Customer card property 'card6' (Value: credit) increased the risk score.",
+            "Behavioral metric 'C13' (Value: 0.0) increased the risk score."
+        ]
+    }
+}

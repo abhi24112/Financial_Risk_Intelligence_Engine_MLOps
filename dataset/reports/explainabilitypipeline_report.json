@@ -1,0 +1,14 @@
+{
+    "pipeline_name": "ExplainabilityPipeline",
+    "status": "success",
+    "started_at": "2026-08-25T18:36:28.085353+00:00",
+    "finished_at": "2026-08-25T18:36:38.638253+00:00",
+    "artifacts": {
+        "explanations_file": "dataset/processed\\explanations.json"
+    },
+    "metadata": {
+        "transactions_explained": 10,
+        "model_uri": "models:/fraud_risk_model/Production"
+    },
+    "error": null
+}

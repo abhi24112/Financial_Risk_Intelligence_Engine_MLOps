@@ -34,7 +34,6 @@ logs/
 # Raw and generated datasets. Keep reports and data-versioning metadata tracked.
 dataset/raw/
 dataset/interim/
-dataset/processed/
 dataset/*.csv
 dataset/*.parquet
 dataset/*.feather
