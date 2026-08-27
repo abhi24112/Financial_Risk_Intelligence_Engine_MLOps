@@ -5,7 +5,6 @@ from typing import Any
 import mlflow
 import mlflow.sklearn as mlflow_sklearn
 import pandas as pd
-import shap
 from mlflow.tracking import MlflowClient
 
 from pipelines.base_pipeline import BasePipeline
@@ -30,25 +29,6 @@ class ExplainabilityPipeline(BasePipeline):
             mlflow.set_tracking_uri(mlflow_uri)
 
         self.sample_size = self.config.get("sample_size", 100)  # limit for speed
-
-    def _get_human_readable_reason(self, feature_name: str, shap_value: float, feature_value: Any) -> str:
-        """Translates raw SHAP features into analyst-readable strings."""
-        direction = "increased" if shap_value > 0 else "decreased"
-
-        # Round numeric values for cleaner display
-        if isinstance(feature_value, float):
-            feature_value = round(feature_value, 2)
-
-        if feature_name == "TransactionAmt":
-            return f"Transaction amount (${feature_value}) {direction} the risk score."
-        elif feature_name.startswith("card"):
-            return f"Customer card property '{feature_name}' (Value: {feature_value}) {direction} the risk score."
-        elif feature_name == "DeviceType":
-            return f"Device type ({feature_value}) {direction} the risk score."
-        elif "missing" in feature_name.lower():
-            return f"Missing information in '{feature_name}' {direction} the risk score."
-        else:
-            return f"Behavioral metric '{feature_name}' (Value: {feature_value}) {direction} the risk score."
 
     def _execute(self) -> dict[str, Any]:
         self.logger.info("Starting Explainability Pipeline (SHAP)...")
@@ -121,40 +101,11 @@ class ExplainabilityPipeline(BasePipeline):
         else:
             X_shap = X_sample
 
-        # 4. Calculate SHAP values
-        self.logger.info("Initializing SHAP TreeExplainer...")
-        explainer = shap.TreeExplainer(model)
+        # 4. Generate Explanations using SHAPEngine
+        from explainability.shap_engine import SHAPEngine
 
-        self.logger.info(f"Calculating SHAP values for {len(X_shap)} transactions...")
-        shap_values = explainer.shap_values(X_shap)
-
-        # LightGBM/XGBoost binary objective format handling
-        if isinstance(shap_values, list):
-            shap_values = shap_values[1]
-
-        # 5. Map to Human Readable Explanations
-        explanations = {}
-
-        for i in range(len(X_shap)):
-            tx_id = str(tx_ids[i])
-            tx_shap_vals = shap_values[i]
-
-            # Combine feature names, their SHAP values, and the actual feature value from X_sample
-            feature_impacts = list(zip(X_shap.columns, tx_shap_vals, X_sample.iloc[i].values, strict=False))
-
-            # Sort by absolute SHAP value (importance)
-            feature_impacts.sort(key=lambda x: abs(x[1]), reverse=True)
-
-            # Take top 3 most important features for this specific transaction
-            top_features = feature_impacts[:3]
-
-            reasons = [self._get_human_readable_reason(feat, float(shap_val), feat_val) for feat, shap_val, feat_val in top_features]
-
-            explanations[tx_id] = {
-                "top_features": [f[0] for f in top_features],
-                "shap_values": [float(f[1]) for f in top_features],
-                "reasons": reasons,
-            }
+        engine = SHAPEngine()
+        explanations = engine.explain(model=model, X_sample=X_sample, X_shap=X_shap, tx_ids=list(tx_ids))
 
         # Save to disk as an artifact
         explain_dir = "dataset/processed"

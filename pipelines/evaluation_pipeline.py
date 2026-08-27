@@ -5,15 +5,8 @@ from typing import Any
 import joblib
 import mlflow
 import pandas as pd
-from sklearn.metrics import (
-    average_precision_score,
-    confusion_matrix,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
 
+from ml.evaluation.evaluator import ModelEvaluator
 from pipelines.base_pipeline import BasePipeline
 from shared import configure_logging, constants
 
@@ -37,7 +30,6 @@ class EvaluationPipeline(BasePipeline):
             mlflow.set_tracking_uri(mlflow_uri)
 
     def _get_training_report(self) -> dict[str, Any]:
-        """Reads the JSON report from the TrainingPipeline to find the model path and Run ID."""
         report_path = os.path.join("dataset", "reports", "trainingpipeline_report.json")
         if not os.path.exists(report_path):
             raise FileNotFoundError(f"Training report not found at {report_path}. Run TrainingPipeline first.")
@@ -77,34 +69,9 @@ class EvaluationPipeline(BasePipeline):
         X_test = test_df.drop(columns=test_drop)
         y_test = test_df[self.target_col]
 
-        # 4. Generate Predictions
-        self.logger.info("Generating predictions on test set...")
-        y_prob = model.predict_proba(X_test)[:, 1]
-        y_pred = model.predict(X_test)
-
-        # 5. Calculate strict business metrics (Cost-Sensitive)
-        self.logger.info("Calculating MLOps evaluation metrics...")
-        roc_auc = float(roc_auc_score(y_test, y_prob))
-        pr_auc = float(average_precision_score(y_test, y_prob))
-        f1 = float(f1_score(y_test, y_pred))
-        recall = float(recall_score(y_test, y_pred))
-        precision = float(precision_score(y_test, y_pred))
-
-        # Confusion Matrix breakdown
-        cm = confusion_matrix(y_test, y_pred)
-        tn, fp, fn, tp = int(cm[0][0]), int(cm[0][1]), int(cm[1][0]), int(cm[1][1])
-
-        metrics = {
-            "test_roc_auc": roc_auc,
-            "test_pr_auc": pr_auc,
-            "test_f1_score": f1,
-            "test_recall": recall,
-            "test_precision": precision,
-            "test_true_negatives": tn,
-            "test_false_positives": fp,
-            "test_false_negatives": fn,
-            "test_true_positives": tp,
-        }
+        # 4. Generate Predictions & Calculate strict business metrics
+        evaluator = ModelEvaluator()
+        metrics = evaluator.evaluate(model, X_test, y_test)
 
         # 6. Push metrics to the exact same MLflow run
         if run_id:
@@ -114,7 +81,7 @@ class EvaluationPipeline(BasePipeline):
         else:
             self.logger.warning("No MLflow run_id found. Metrics not logged to MLflow.")
 
-        self.logger.info(f"Evaluation complete. PR-AUC: {pr_auc:.4f} | Recall: {recall:.4f}")
+        self.logger.info(f"Evaluation complete. PR-AUC: {metrics.get('test_pr_auc', 0.0):.4f} | Recall: {metrics.get('test_recall', 0.0):.4f}")
 
         # 7. Return to BasePipeline to generate evaluationpipeline_report.json
         return {"metadata": metrics}

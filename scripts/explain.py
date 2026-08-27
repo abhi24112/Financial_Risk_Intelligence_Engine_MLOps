@@ -7,8 +7,8 @@ project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from pipelines.explainability_pipeline import ExplainabilityPipeline  # noqa: E402
-from shared.config_loader import load_config  # noqa: E402
+from pipelines.explainability_pipeline import ExplainabilityPipeline
+from shared.config_loader import load_config
 
 
 def main():
