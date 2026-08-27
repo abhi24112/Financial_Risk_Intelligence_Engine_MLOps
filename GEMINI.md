@@ -157,7 +157,7 @@ Output: risk score (0–100), risk level (Low/Med/High), anomalous/normal flag.
 | Containerization | Docker, Docker Compose | local + prod parity |
 | Orchestrated deploy | AWS ECS (Fargate) or EKS | serving at scale with low latency |
 | IaC | Terraform | AWS resources (ECS/EKS, ElastiCache Redis, RDS, VPC) |
-| Streaming | **None (No Kafka)** | Intentional exclusion to focus on synchronous <100ms REST SLA without over-engineering |
+| Streaming | **None (No Kafka)** | Intentional exclusion. We rely on **FastAPI's `asyncio` concurrency + horizontal scaling behind a Load Balancer** to handle thousands of simultaneous requests. This meets our synchronous <100ms REST SLA without over-engineering an asynchronous Pub/Sub queue. |
 | CI/CD | GitHub Actions | test → build → push image → deploy |
 
 **Rule:** don't add a technology unless it maps to a concrete need above.
@@ -446,6 +446,9 @@ python scripts/tune.py --model lightgbm --trials 20
 
 ### Known Issues / Gotchas
 
+- **LightGBM Categorical Error during Inference**: (FIXED) The test inference script previously failed with `ValueError: train and valid dataset categorical_feature do not match.`
+  - **Root Cause**: During training, Pandas strings were explicitly cast to `category` dtype. LightGBM internally maps these strings to integer indices and strictly validates that any incoming Pandas DataFrame has the exact same categorical names and schemas.
+  - **The Fix**: Instead of wrestling with Pandas `.astype("category")`, we bypass the validation entirely. We manually hash string categories into numeric codes (`hash(str) % 2**31`), fill missing values with `-1.0`, and pass a pure `float64` numpy array (`df.values`) into `model.predict_proba()`. LightGBM accepts numeric arrays without checking metadata!
 - **Do NOT use `SELECT *`** when loading from PostgreSQL in this project — the transaction table has 394 columns and will trigger `ArrayMemoryError` on low-RAM machines.
 - **MLflow Tracking Backend**: We use `sqlite:///mlflow.db` because `./mlruns` is deprecated by MLflow for UI usage.
 - **PR-AUC Baseline**: In this dataset, fraud prevalence is ~3.5%. Therefore, a PR-AUC of `0.035` is random guessing. A score of `0.45+` is considered extremely strong. Always prioritize Recall (True Positives) over raw Accuracy.
@@ -453,6 +456,6 @@ python scripts/tune.py --model lightgbm --trials 20
 ### Next Steps & Tasks
 
 - [ ] **Lock the Champion Model**: Review Optuna MLflow logs, pick the absolute best model (balancing PR-AUC and Recall), update `configs/model.yaml` with its parameters, and train the official final model.
+- [ ] **FastAPI Serving (`api/`)**: Build the `/predict` endpoint based on the approved `implementation_plan.md`. **Crucial Rule:** It must return a risk score in `<100ms`. We will use FastAPI `BackgroundTasks` to update the Redis Feature Store *after* the request completes to prevent latency spikes and data pollution.
 - [ ] **Registration Pipeline (`pipelines/registration_pipeline.py`)**: Formally promote the champion model into the MLflow Model Registry (so the API can pull the "Production" tag).
 - [ ] **Explainability Pipeline (`pipelines/explainability_pipeline.py`)**: Implement SHAP to generate human-readable reasons for fraud flags (e.g., "Transaction amount is 4.2x customer average"). Must be decoupled from raw prediction.
-- [ ] **FastAPI Serving (`api/`)**: Build the `/predict` endpoint. **Crucial Rule:** It must return a risk score in `<100ms`. We will need to design an Online Feature Store (Redis) to bypass PostgreSQL for inference lookups.
