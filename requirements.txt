@@ -17,6 +17,7 @@ optuna
 scikit-learn
 sqlalchemy 
 psycopg2-binary
+redis
 
 # MLOps
 mlflow
@@ -27,3 +28,6 @@ pre-commit
 
 # configs
 pyyaml
+
+#caching
+redis
