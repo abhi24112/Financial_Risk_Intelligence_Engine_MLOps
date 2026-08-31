@@ -1,0 +1,19 @@
+{
+    "pipeline_name": "MonitoringPipeline",
+    "status": "success",
+    "started_at": "2026-08-31T21:33:56.654825+00:00",
+    "finished_at": "2026-08-31T21:34:51.466342+00:00",
+    "artifacts": {
+        "html_report": "monitoring/reports\\data_drift_report.html",
+        "json_report": "monitoring/reports\\data_drift_report.json"
+    },
+    "metadata": {
+        "total_features": 295,
+        "drifted_features": 44,
+        "drift_share": 0.14915254237288136,
+        "drift_threshold": 0.3,
+        "dataset_drift_detected": false,
+        "retraining_triggered": false
+    },
+    "error": null
+}

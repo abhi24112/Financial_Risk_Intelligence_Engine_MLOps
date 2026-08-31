@@ -22,6 +22,7 @@ redis
 # MLOps
 mlflow
 shap
+evidently>=0.7.0
 
 # API & Serving
 fastapi>=0.110.0

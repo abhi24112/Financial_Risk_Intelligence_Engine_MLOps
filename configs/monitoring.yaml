@@ -1,0 +1,18 @@
+# Monitoring Configuration (Evidently AI)
+
+data:
+  reference_path: "dataset/processed/train.parquet"
+  current_path: "dataset/processed/test.parquet"
+
+drift:
+  # Share of drifted columns to trigger an overall dataset drift alert
+  drift_share_threshold: 0.30
+  
+  # Target / Label column
+  target_column: "isFraud"
+  prediction_column: "risk_score"
+
+reports:
+  output_dir: "monitoring/reports"
+  html_report_name: "data_drift_report.html"
+  json_report_name: "data_drift_report.json"
