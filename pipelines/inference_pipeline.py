@@ -258,21 +258,90 @@ class InferencePipeline(BasePipeline):
             prediction = self.model.predict(df_features)
             fraud_probability = float(prediction[0])
 
-        # 3. Calculate Risk Score (0-100)
-        # Note: In a full setup, this would use Platt Scaling/Isotonic Regression from CalibrationPipeline
-        risk_score = min(max(int(fraud_probability * 100), 0), 100)  # type: ignore
+        # 3. Calculate Calibrated Risk Score (0-100) & Risk Level
+        risk_score, risk_level = self._calculate_calibrated_risk(fraud_probability)
 
-        # 4. Assign Risk Level
-        if risk_score >= 80:
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
+        return {
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+            "fraud_probability": round(fraud_probability, 4),
+            "latency_ms": round(latency_ms, 2),
+        }
+
+    def _calculate_calibrated_risk(self, fraud_prob: float) -> tuple[int, str]:
+        """
+        Calibrates raw rare-event probability into a standard 0-100 Financial Risk Score.
+        In IEEE-CIS dataset, baseline fraud prevalence is ~3.5% (0.035).
+        - Prob < 0.035 (0-3.5%)   -> Low Risk (0-39)
+        - Prob 0.035-0.08 (3.5-8%) -> Medium Risk (40-69)
+        - Prob >= 0.08 (8%+)      -> High Risk (70-100)
+        """
+        if fraud_prob <= 0.035:
+            score = int((fraud_prob / 0.035) * 40)
+        elif fraud_prob <= 0.08:
+            score = int(40 + ((fraud_prob - 0.035) / 0.045) * 30)
+        else:
+            score = int(70 + min((fraud_prob - 0.08) / 0.30, 1.0) * 30)
+
+        risk_score = min(max(score, 0), 100)
+
+        if risk_score >= 70:
             risk_level = "High"
         elif risk_score >= 40:
             risk_level = "Medium"
         else:
             risk_level = "Low"
 
-        latency_ms = (time.perf_counter() - start_time) * 1000
+        return risk_score, risk_level
 
-        return {"risk_score": risk_score, "risk_level": risk_level, "fraud_probability": fraud_probability, "latency_ms": round(latency_ms, 2)}
+    def predict_batch(self, raw_tx_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        High-throughput vectorized batch prediction for multiple transactions.
+        Combines feature engineering and runs a single matrix forward pass.
+        """
+        if not raw_tx_list:
+            return []
+
+        if self.model is None:
+            raise RuntimeError("No model is loaded for inference.")
+
+        start_time = time.perf_counter()
+
+        # Build feature frames for all transactions
+        dfs = [self._build_features(tx) for tx in raw_tx_list]
+        combined_df = pd.concat(dfs, ignore_index=True)
+        X_matrix = combined_df.values
+
+        # Run single vectorized batch inference
+        try:
+            probabilities = self.model.predict_proba(X_matrix)
+            fraud_probs = probabilities[:, 1]
+        except AttributeError:
+            preds = self.model.predict(combined_df)
+            fraud_probs = preds
+
+        total_latency_ms = (time.perf_counter() - start_time) * 1000
+        avg_latency_ms = total_latency_ms / len(raw_tx_list)
+
+        results = []
+        for i, prob in enumerate(fraud_probs):
+            prob_float = float(prob)
+            risk_score, risk_level = self._calculate_calibrated_risk(prob_float)
+
+            tx_id = raw_tx_list[i].get("TransactionID")
+            results.append(
+                {
+                    "transaction_id": str(tx_id) if tx_id is not None else None,
+                    "risk_score": risk_score,
+                    "risk_level": risk_level,
+                    "fraud_probability": round(prob_float, 4),
+                    "latency_ms": round(avg_latency_ms, 2),
+                }
+            )
+
+        return results
 
     def _execute(self) -> dict[str, Any]:
         """

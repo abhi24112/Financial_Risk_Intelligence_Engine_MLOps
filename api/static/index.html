@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adaptive Financial Risk Intelligence Engine</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --border: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --low-risk: #10b981;
+            --med-risk: #f59e0b;
+            --high-risk: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            padding: 24px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1150px;
+            width: 100%;
+        }
+
+        header {
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .header-title p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #064e3b;
+            color: #34d399;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #34d399;
+            border-radius: 50%;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .card h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 14px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .preset-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-preset {
+            background: #334155;
+            color: #f1f5f9;
+        }
+        .btn-preset:hover {
+            background: #475569;
+        }
+
+        .btn-primary {
+            background: #0284c7;
+            color: white;
+            padding: 10px 16px;
+            font-size: 14px;
+        }
+        .btn-primary:hover {
+            background: #0369a1;
+        }
+
+        .btn-secondary {
+            background: #475569;
+            color: white;
+            padding: 10px 16px;
+            font-size: 14px;
+        }
+        .btn-secondary:hover {
+            background: #64748b;
+        }
+
+        .btn-explain {
+            background: #7c3aed;
+            color: white;
+            padding: 10px 16px;
+            font-size: 14px;
+        }
+        .btn-explain:hover {
+            background: #6d28d9;
+        }
+
+        textarea {
+            width: 100%;
+            height: 230px;
+            background: #090d16;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #38bdf8;
+            padding: 12px;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 13px;
+            resize: vertical;
+            margin-bottom: 14px;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .metric-tile {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .metric-val {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .risk-gauge {
+            height: 12px;
+            background: #334155;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .risk-bar {
+            height: 100%;
+            width: 0%;
+            transition: width 0.4s ease, background-color 0.4s ease;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .badge-low { background: #064e3b; color: #34d399; }
+        .badge-medium { background: #78350f; color: #fbbf24; }
+        .badge-high { background: #7f1d1d; color: #f87171; }
+
+        .reasons-list {
+            margin-top: 14px;
+            list-style: none;
+        }
+
+        .reasons-list li {
+            background: #0f172a;
+            padding: 10px 14px;
+            border-left: 3px solid #7c3aed;
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #cbd5e1;
+        }
+
+        .batch-table-container {
+            margin-top: 14px;
+            max-height: 210px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: #0f172a;
+        }
+
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: #1e293b;
+            color: var(--accent);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .raw-json {
+            background: #090d16;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+            color: #a5f3fc;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-title">
+                <h1>Adaptive Financial Risk Intelligence Engine</h1>
+                <p>High-Throughput ML Serving & Explainability Interface (<100ms SLA)</p>
+            </div>
+            <div id="service-status" class="status-badge">
+                <span class="status-dot"></span> Online (<span id="api-ver">1.0.0</span>)
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- Left: Transaction Input -->
+            <div class="card">
+                <h2>
+                    <span>Transaction Payload</span>
+                    <span style="font-size: 12px; color: var(--text-muted);">JSON Format</span>
+                </h2>
+
+                <div class="preset-buttons">
+                    <button class="btn-preset" onclick="loadNormal()">Normal Tx ($30.00)</button>
+                    <button class="btn-preset" onclick="loadFraud()">Suspicious Tx ($225.00)</button>
+                    <button class="btn-preset" onclick="loadBatchSample()">Batch Sample (3 Tx)</button>
+                </div>
+
+                <textarea id="payload-input" spellcheck="false"></textarea>
+
+                <div class="action-row">
+                    <button class="btn-primary" onclick="scoreTransaction()">⚡ Evaluate Risk (/predict)</button>
+                    <button class="btn-explain" onclick="explainTransaction()">🔍 Explain Risk (/explain)</button>
+                    <button class="btn-secondary" onclick="scoreBatch()">📦 Score Batch (/predict/batch)</button>
+                </div>
+            </div>
+
+            <!-- Right: Scoring & SHAP Results -->
+            <div class="card">
+                <h2>
+                    <span>Evaluation & Telemetry</span>
+                    <span id="latency-tag" style="font-size: 13px; color: var(--text-muted);">Latency: -- ms</span>
+                </h2>
+
+                <!-- Single Prediction View -->
+                <div id="single-view">
+                    <div class="metric-tile">
+                        <div>
+                            <div class="metric-label">Risk Level</div>
+                            <div id="risk-level-badge" style="margin-top: 6px;">
+                                <span class="badge" style="background:#334155; color:#94a3b8;">Awaiting Input</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="metric-label" style="text-align: right;">Risk Score</div>
+                            <div id="risk-score-val" class="metric-val" style="text-align: right;">-- / 100</div>
+                        </div>
+                    </div>
+
+                    <div class="risk-gauge">
+                        <div id="risk-bar" class="risk-bar"></div>
+                    </div>
+
+                    <div style="margin-top: 18px;">
+                        <div class="metric-label" style="margin-bottom: 6px;">Analyst Reasons (SHAP Engine)</div>
+                        <ul id="reasons-container" class="reasons-list">
+                            <li style="border-left-color: #475569; color: #94a3b8;">Click 'Explain Risk' to inspect SHAP feature attribution.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Batch Results View (Hidden by default) -->
+                <div id="batch-view" style="display: none;">
+                    <div class="metric-tile">
+                        <div>
+                            <div class="metric-label">Total Transactions</div>
+                            <div id="batch-total-count" class="metric-val">3</div>
+                        </div>
+                        <div>
+                            <div class="metric-label" style="text-align: right;">Throughput</div>
+                            <div id="batch-throughput-val" class="metric-val" style="text-align: right; color: var(--accent);">-- tx/s</div>
+                        </div>
+                    </div>
+
+                    <div class="batch-table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Tx #</th>
+                                    <th>Amount</th>
+                                    <th>Risk Score</th>
+                                    <th>Risk Level</th>
+                                    <th>Fraud Prob</th>
+                                </tr>
+                            </thead>
+                            <tbody id="batch-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="margin-top: 14px;">
+                    <div class="metric-label">Raw JSON Response</div>
+                    <pre id="raw-output" class="raw-json">{}</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const normalPayload = {
+            "TransactionAmt": 30.00,
+            "TransactionDT": 86620,
+            "ProductCD": "H",
+            "card1": "1790",
+            "card2": "555",
+            "card3": "150",
+            "card6": "debit",
+            "P_emaildomain": "aol.com",
+            "C1": 1.0,
+            "C2": 1.0,
+            "C6": 1.0,
+            "C8": 1.0,
+            "C10": 1.0,
+            "C11": 1.0,
+            "C13": 1.0,
+            "C14": 1.0,
+            "D1": 0.0,
+            "id_15": "Found",
+            "id_16": "Found",
+            "id_30": "Mac OS X 10_11_6",
+            "id_31": "chrome 62.0",
+            "DeviceType": "desktop"
+        };
+
+        const fraudPayload = {
+            "TransactionAmt": 225.00,
+            "TransactionDT": 92350,
+            "ProductCD": "R",
+            "card1": "4425",
+            "card2": "562",
+            "card3": "150",
+            "card6": "credit",
+            "P_emaildomain": "gmail.com",
+            "C1": 7.0,
+            "C2": 6.0,
+            "id_15": "New",
+            "id_16": "NotFound",
+            "id_30": "Windows 10",
+            "id_31": "firefox",
+            "DeviceType": "desktop",
+            "is_new_email": 1,
+            "is_new_device": 1
+        };
+
+        const batchPayload = {
+            "transactions": [
+                {
+                    "TransactionAmt": 30.00,
+                    "TransactionDT": 86620,
+                    "ProductCD": "H",
+                    "card1": "1790",
+                    "card2": "555",
+                    "card3": "150",
+                    "card6": "debit",
+                    "P_emaildomain": "aol.com",
+                    "C1": 1.0, "C2": 1.0, "C6": 1.0, "C8": 1.0, "C10": 1.0, "C11": 1.0, "C13": 1.0, "C14": 1.0, "D1": 0.0,
+                    "id_15": "Found", "id_16": "Found",
+                    "DeviceType": "desktop"
+                },
+                {
+                    "TransactionAmt": 225.00,
+                    "TransactionDT": 92350,
+                    "ProductCD": "R",
+                    "card1": "4425",
+                    "card2": "562",
+                    "card3": "150",
+                    "card6": "credit",
+                    "P_emaildomain": "gmail.com",
+                    "C1": 7.0, "C2": 6.0,
+                    "id_15": "New", "id_16": "NotFound",
+                    "DeviceType": "desktop",
+                    "is_new_device": 1
+                },
+                {
+                    "TransactionAmt": 107.95,
+                    "TransactionDT": 89000,
+                    "ProductCD": "W",
+                    "card1": "1790",
+                    "card2": "555",
+                    "card3": "150",
+                    "card6": "debit",
+                    "P_emaildomain": "gmail.com",
+                    "C1": 1.0, "C2": 1.0, "C13": 1.0, "C14": 1.0,
+                    "DeviceType": "desktop"
+                }
+            ]
+        };
+
+        function loadNormal() {
+            document.getElementById("payload-input").value = JSON.stringify(normalPayload, null, 2);
+            document.getElementById("single-view").style.display = "block";
+            document.getElementById("batch-view").style.display = "none";
+        }
+
+        function loadFraud() {
+            document.getElementById("payload-input").value = JSON.stringify(fraudPayload, null, 2);
+            document.getElementById("single-view").style.display = "block";
+            document.getElementById("batch-view").style.display = "none";
+        }
+
+        function loadBatchSample() {
+            document.getElementById("payload-input").value = JSON.stringify(batchPayload, null, 2);
+            document.getElementById("single-view").style.display = "none";
+            document.getElementById("batch-view").style.display = "block";
+        }
+
+        // Initialize with Normal preset
+        loadNormal();
+
+        async function scoreTransaction() {
+            try {
+                const parsed = JSON.parse(document.getElementById("payload-input").value);
+                // Smart router: if input contains transactions array, redirect to batch
+                if (parsed.transactions && Array.isArray(parsed.transactions)) {
+                    await scoreBatch();
+                    return;
+                }
+
+                const res = await fetch("/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(parsed)
+                });
+                const data = await res.json();
+                renderSingleResult(data);
+            } catch (err) {
+                alert("Error in prediction request: " + err);
+            }
+        }
+
+        async function explainTransaction() {
+            try {
+                const parsed = JSON.parse(document.getElementById("payload-input").value);
+                const tx = parsed.transactions ? parsed.transactions[0] : parsed;
+                const res = await fetch("/explain", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ transaction: tx, top_k: 4 })
+                });
+                const data = await res.json();
+                renderSingleResult(data);
+                renderReasons(data.reasons || []);
+            } catch (err) {
+                alert("Error in explainability request: " + err);
+            }
+        }
+
+        async function scoreBatch() {
+            try {
+                const parsed = JSON.parse(document.getElementById("payload-input").value);
+                const body = parsed.transactions ? parsed : { transactions: [parsed] };
+                const res = await fetch("/predict/batch", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                renderBatchResult(data, body.transactions);
+            } catch (err) {
+                alert("Error in batch request: " + err);
+            }
+        }
+
+        function renderSingleResult(data) {
+            document.getElementById("single-view").style.display = "block";
+            document.getElementById("batch-view").style.display = "none";
+
+            document.getElementById("raw-output").textContent = JSON.stringify(data, null, 2);
+            document.getElementById("latency-tag").textContent = `Latency: ${data.latency_ms} ms`;
+            
+            const score = data.risk_score || 0;
+            document.getElementById("risk-score-val").textContent = `${score} / 100`;
+
+            const bar = document.getElementById("risk-bar");
+            bar.style.width = `${score}%`;
+
+            const badge = document.getElementById("risk-level-badge");
+            const level = data.risk_level || "Low";
+
+            if (level === "High" || score >= 70) {
+                bar.style.backgroundColor = "var(--high-risk)";
+                badge.innerHTML = `<span class="badge badge-high">High Risk</span>`;
+            } else if (level === "Medium" || score >= 40) {
+                bar.style.backgroundColor = "var(--med-risk)";
+                badge.innerHTML = `<span class="badge badge-medium">Medium Risk</span>`;
+            } else {
+                bar.style.backgroundColor = "var(--low-risk)";
+                badge.innerHTML = `<span class="badge badge-low">Low Risk</span>`;
+            }
+        }
+
+        function renderBatchResult(data, originalTxs) {
+            document.getElementById("single-view").style.display = "none";
+            document.getElementById("batch-view").style.display = "block";
+
+            document.getElementById("raw-output").textContent = JSON.stringify(data, null, 2);
+            document.getElementById("latency-tag").textContent = `Batch Latency: ${data.batch_latency_ms} ms`;
+            document.getElementById("batch-total-count").textContent = data.total_transactions;
+            document.getElementById("batch-throughput-val").textContent = `${data.throughput_tx_per_sec} tx/s`;
+
+            const tbody = document.getElementById("batch-table-body");
+            tbody.innerHTML = "";
+
+            (data.predictions || []).forEach((pred, idx) => {
+                const tr = document.createElement("tr");
+                const amt = originalTxs && originalTxs[idx] ? `$${originalTxs[idx].TransactionAmt}` : "--";
+                
+                let badgeClass = "badge-low";
+                if (pred.risk_level === "High" || pred.risk_score >= 70) badgeClass = "badge-high";
+                else if (pred.risk_level === "Medium" || pred.risk_score >= 40) badgeClass = "badge-medium";
+
+                tr.innerHTML = `
+                    <td><strong>#${idx + 1}</strong></td>
+                    <td>${amt}</td>
+                    <td><strong>${pred.risk_score} / 100</strong></td>
+                    <td><span class="badge ${badgeClass}">${pred.risk_level}</span></td>
+                    <td>${(pred.fraud_probability * 100).toFixed(1)}%</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderReasons(reasons) {
+            const container = document.getElementById("reasons-container");
+            container.innerHTML = "";
+            if (reasons.length === 0) {
+                container.innerHTML = `<li style="border-left-color: #475569; color: #94a3b8;">No SHAP explanation returned.</li>`;
+                return;
+            }
+            reasons.forEach(r => {
+                const li = document.createElement("li");
+                li.textContent = r;
+                container.appendChild(li);
+            });
+        }
+
+        // Fetch API version on load
+        fetch("/health").then(r => r.json()).then(d => {
+            document.getElementById("api-ver").textContent = d.version || "1.0.0";
+        }).catch(() => {});
+    </script>
+</body>
+</html>

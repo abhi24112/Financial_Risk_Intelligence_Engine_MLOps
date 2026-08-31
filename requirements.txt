@@ -13,7 +13,7 @@ lightgbm
 xgboost
 optuna
 
-# Database
+# Database & Caching
 scikit-learn
 sqlalchemy 
 psycopg2-binary
@@ -23,13 +23,18 @@ redis
 mlflow
 shap
 
+# API & Serving
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+httpx>=0.27.0
+jinja2>=3.1.0
+
 # Linting/test
 pre-commit
 pytest
+pytest-asyncio
 ruff
 
-# configs
+# Configs
 pyyaml
-
-#caching
-redis

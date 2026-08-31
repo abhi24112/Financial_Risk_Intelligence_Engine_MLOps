@@ -27,6 +27,7 @@ line-length = 150
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-v --maxfail=2 --disable-warnings"
 
 [build-system]

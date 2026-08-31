@@ -51,7 +51,8 @@ class SHAPEngine:
         explainer = shap.TreeExplainer(model)
 
         self.logger.info(f"Calculating SHAP values for {len(X_shap)} transactions...")
-        shap_values = explainer.shap_values(X_shap)
+        X_input = X_shap.values if isinstance(X_shap, pd.DataFrame) else X_shap
+        shap_values = explainer.shap_values(X_input)
 
         # LightGBM/XGBoost binary objective format handling
         if isinstance(shap_values, list):
