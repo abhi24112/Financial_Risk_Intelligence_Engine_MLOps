@@ -56,10 +56,7 @@ class CleaningPipeline(BasePipeline):
 
         # Verifying that merge has not increased the row count
         if len(df) != trans_len:
-            raise ValueError(
-                "Merge increased transaction row count. "
-                "TransactionID may not be unique in identity_raw."
-            )
+            raise ValueError("Merge increased transaction row count. " "TransactionID may not be unique in identity_raw.")
 
         df = self._drop_columns(df)
         df = self._normalize_strings(df)
@@ -83,10 +80,7 @@ class CleaningPipeline(BasePipeline):
     def _validate_database_connection(self) -> None:
         self.logger.info("Testing Database connection")
         if not self.database.test_connection():
-            raise ConnectionError(
-                "Could not connect to PostgreSQL. "
-                "Check DATABASE_URL or ensure PostgreSQL is running."
-            )
+            raise ConnectionError("Could not connect to PostgreSQL. " "Check DATABASE_URL or ensure PostgreSQL is running.")
         self.logger.info("Database connection successful.")
 
     # Loading Transaction Dataset
@@ -94,9 +88,7 @@ class CleaningPipeline(BasePipeline):
         self.logger.info("Loading Transaction dataset from table: %s", self.trans_table_name)
         query = f"SELECT * FROM {self.trans_table_name}"
         df = pd.read_sql(query, self.database.get_engine())
-        self.logger.info(
-            f"Transaction data is loaded: {len(df)} rows, {len(df.columns.to_list())} columns"
-        )
+        self.logger.info(f"Transaction data is loaded: {len(df)} rows, {len(df.columns.to_list())} columns")
         return df
 
     # Loading Identity Dataset
@@ -104,9 +96,7 @@ class CleaningPipeline(BasePipeline):
         self.logger.info("Loading identity dataset from table: %s", self.iden_table_name)
         query = f"SELECT * FROM {self.iden_table_name}"
         df = pd.read_sql(query, self.database.get_engine())
-        self.logger.info(
-            f"identity data is loaded: {len(df)} rows, {len(df.columns.to_list())} columns"
-        )
+        self.logger.info(f"identity data is loaded: {len(df)} rows, {len(df.columns.to_list())} columns")
         return df
 
     # Dropping unwanted columns
@@ -124,9 +114,7 @@ class CleaningPipeline(BasePipeline):
 
             self.logger.info(f"Dropped {len(col_drop)} columns: {col_drop}")
         else:
-            self.logger.info(
-                "No unwanted columns found (all loaded columns match selection requirements)."
-            )
+            self.logger.info("No unwanted columns found (all loaded columns match selection requirements).")
 
         return df
 
@@ -169,3 +157,12 @@ class CleaningPipeline(BasePipeline):
         self.logger.info(f"Saving cleaned dataset to {output_path}...")
         df.to_parquet(output_path, index=False)
         self.logger.info("Dataset successfully saved.")
+
+
+if __name__ == "__main__":
+    import sys
+
+    pipeline = CleaningPipeline()
+    result = pipeline.run()
+    if result.status != "success":
+        sys.exit(1)

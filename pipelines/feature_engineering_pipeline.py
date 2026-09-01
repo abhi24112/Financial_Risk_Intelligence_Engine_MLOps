@@ -78,9 +78,7 @@ class FeatureEngineeringPipeline(BasePipeline):
         cat_cols = df.select_dtypes(include=["object", "category", "string"]).columns
         if len(cat_cols) > 0:
             df[cat_cols] = df[cat_cols].fillna("missing").astype(str)
-            self.logger.info(
-                f"Filled NaNs with 'missing' and casted {len(cat_cols)} categorical columns to str."
-            )
+            self.logger.info(f"Filled NaNs with 'missing' and casted {len(cat_cols)} categorical columns to str.")
 
         # 3. DO NOT impute numerical columns - XGBoost handles NaNs natively
         self.logger.info("Retained native NaNs for remaining numerical columns.")
@@ -129,21 +127,15 @@ class FeatureEngineeringPipeline(BasePipeline):
     def _add_velocity_and_time_features(self, df: pd.DataFrame) -> pd.DataFrame:
         self.logger.info("Calculating time-since-last and velocity features...")
 
-        df["time_since_last_transaction"] = (
-            df.groupby("uid_card")["TransactionDT"].diff().fillna(-1)
-        )
+        df["time_since_last_transaction"] = df.groupby("uid_card")["TransactionDT"].diff().fillna(-1)
 
         self.logger.info("Computing 24h rolling aggregations...")
         temp = df[["uid_card", "TransactionAmt", "TransactionDT"]].copy()
         temp["pseudo_dt"] = pd.to_datetime(temp["TransactionDT"], unit="s")
 
         rolling = temp.groupby("uid_card").rolling("24h", on="pseudo_dt")
-        transactions_last_24h = (
-            rolling["TransactionAmt"].count().reset_index(level=0, drop=True).sort_index()
-        )
-        amount_last_24h = (
-            rolling["TransactionAmt"].sum().reset_index(level=0, drop=True).sort_index()
-        )
+        transactions_last_24h = rolling["TransactionAmt"].count().reset_index(level=0, drop=True).sort_index()
+        amount_last_24h = rolling["TransactionAmt"].sum().reset_index(level=0, drop=True).sort_index()
 
         df["transactions_last_24h"] = transactions_last_24h.to_numpy()
         df["amount_last_24h"] = amount_last_24h.to_numpy()
@@ -162,12 +154,19 @@ class FeatureEngineeringPipeline(BasePipeline):
         return df
 
     def _save_features(self, df: pd.DataFrame) -> None:
-        processed_dir = getattr(
-            constants, "PROCESSED_DATASET_DIR", os.path.join("dataset", "processed")
-        )
+        processed_dir = getattr(constants, "PROCESSED_DATASET_DIR", os.path.join("dataset", "processed"))
         os.makedirs(processed_dir, exist_ok=True)
 
         output_path = os.path.join(processed_dir, "features.parquet")
         self.logger.info(f"Saving engineered features to {output_path}...")
         df.to_parquet(output_path, index=False)
         self.logger.info("Features successfully saved.")
+
+
+if __name__ == "__main__":
+    import sys
+
+    pipeline = FeatureEngineeringPipeline()
+    result = pipeline.run()
+    if result.status != "success":
+        sys.exit(1)

@@ -33,7 +33,9 @@ class DatasetBuilderPipeline(BasePipeline):
 
         # Using K=7 gives exactly 1/7 (~14.2%) per fold.
         # We assign 1 fold to Test, 1 fold to Val, and 5 folds to Train (~71.4%)
-        sgkf = StratifiedGroupKFold(n_splits=7, shuffle=True, random_state=42)
+        n_splits = self.config.get("n_splits", 7)
+        random_state = self.config.get("random_state", 42)
+        sgkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
         folds = list(sgkf.split(df, y=df[constants.TARGET_FEATURE], groups=df["uid_card"]))
 
         # Extract indices for the first two folds
@@ -80,10 +82,17 @@ class DatasetBuilderPipeline(BasePipeline):
 
     # Saving the parquet files
     def _save_dataset(self, df: pd.DataFrame, filename: str) -> None:
-        processed_dir = getattr(
-            constants, "PROCESSED_DATASET_DIR", os.path.join("dataset", "processed")
-        )
+        processed_dir = getattr(constants, "PROCESSED_DATASET_DIR", os.path.join("dataset", "processed"))
         os.makedirs(processed_dir, exist_ok=True)
         path = os.path.join(processed_dir, filename)
         self.logger.info(f"Saving {filename} ({df.shape[0]} rows) to {path}...")
         df.to_parquet(path, index=False)
+
+
+if __name__ == "__main__":
+    import sys
+
+    pipeline = DatasetBuilderPipeline()
+    result = pipeline.run()
+    if result.status != "success":
+        sys.exit(1)
