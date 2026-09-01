@@ -355,6 +355,201 @@ logic — it's a re-invocation of the training path triggered by
   happens in `_execute()`, called only via `run()`.
 - No pipeline reaches into another pipeline's internals — they communicate
   only through their declared outputs (files in `data/`, models in the
+**Rule:** don't add a technology unless it maps to a concrete need above.
+Anything speculative goes in `docs/roadmap.md` as "future," not into the repo.
+
+---
+
+## 7. Repository Layout (top-level, already fixed — do not restructure casually)
+
+```
+Adaptive-Financial-Risk-Intelligence-Engine/
+├── .github/            # CI/CD workflows, issue/PR templates, CODEOWNERS
+├── airflow/            # dags/, plugins/, operators/, sensors/
+├── api/                # FastAPI: routes/, middleware/, schemas.py, app.py, main.py
+├── apps/                # service entrypoints (inference_service.py, monitoring_service.py, ...)
+├── configs/             # model.yaml, airflow.yaml, database.yaml, api.yaml, monitoring.yaml, logging.yaml, aws.yaml, paths.yaml — NO hardcoded values anywhere else
+├── data/                 # raw/, interim/, processed/, external/, validation_reports/ — DVC-tracked, local/temp only
+├── database/             # connection.py, loader.py, schema.py, queries.py, session.py, migrations/ — DB interaction ONLY, no ML logic
+├── deployment/            # docker/, kubernetes/, aws/, scripts/
+├── docker/                # Dockerfile.api, Dockerfile.training, Dockerfile.airflow, entrypoint.sh
+├── docs/                   # architecture.md, api.md, ml_pipeline.md, deployment.md, roadmap.md, interview_notes.md
+├── dvc/                     # pipelines/, stages/, params.yaml
+├── explainability/           # shap_engine.py, analyst_view.py, debug_view.py, feature_mapper.py, templates.py, explanation_service.py
+├── feature_store/              # feature_builder.py, feature_registry.py, aggregations.py, validators.py, metadata.py
+├── infrastructure/               # terraform/, aws/, networking/, variables/
+├── ml/                             # training/, inference/, evaluation/, calibration/, registry/, models/, utils/
+├── monitoring/                      # evidently/, metrics.py, drift.py, alerts.py, dashboards.py
+├── pipelines/                        # <-- see Section 8, this is the ML lifecycle backbone
+├── scripts/                            # CLI helpers: download_dataset.py, seed_database.py, train.py, predict.py, explain.py, cleanup.py
+├── shared/                              # logger.py, constants.py, exceptions.py, decorators.py, helpers.py, enums.py
+├── tests/                                # unit/, integration/, api/, ml/, performance/
+├── notebooks/                             # exploration ONLY — 01_eda.ipynb, 02_feature_engineering.ipynb, 03_model_experiments.ipynb, archive/ — NO production code lives here
+├── docker-compose.yml                     # runs PostgreSQL, Redis, MLflow, Airflow, API
+├── pyproject.toml
+├── requirements.txt
+├── README.md
+└── Makefile                                # make train / make api / make airflow / make test / make lint / make deploy
+```
+
+---
+
+## 8. Pipelines — Class-Based Design (this is the part not fully in the source docs)
+
+This section formalizes something implied but not explicitly written out in
+the original planning docs: **every pipeline is a class, not a loose script**,
+so Airflow integration, testing, and logging are consistent everywhere.
+
+### 8.1 Core convention
+
+- `pipelines/base_pipeline.py` defines an **abstract `BasePipeline`** that
+  every concrete pipeline inherits from.
+- Every concrete pipeline lives in its own file, is a class, and exposes a
+  single public **`run()`** method as its entrypoint. Airflow tasks call
+  `SomePipeline(config).run()` — nothing else.
+- `BasePipeline` owns the parts that are identical across all 14 stages so
+  they aren't duplicated 14 times:
+  - structured logging (via `shared/logger.py`)
+  - config loading (via `configs/*.yaml`, no hardcoded values)
+  - timing / duration tracking
+  - exception handling + consistent error reporting
+  - artifact tracking (what files/objects this run produced)
+  - status reporting (success/failure/skipped, written somewhere Airflow
+    and monitoring can read)
+- Concrete pipelines implement **only their own business logic**, typically
+  by overriding a protected method (e.g. `_execute()`) that `run()` calls
+  internally after setup and before teardown.
+
+### 8.2 Reference shape
+
+```python
+# pipelines/base_pipeline.py
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
+
+from shared.logger import get_logger
+from shared.exceptions import PipelineError
+
+
+@dataclass
+class PipelineResult:
+    pipeline_name: str
+    status: str  # "success" | "failed" | "skipped"
+    started_at: datetime
+    finished_at: datetime | None = None
+    artifacts: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+
+
+class BasePipeline(ABC):
+    """
+    Shared lifecycle for every stage of the ML system.
+    Concrete pipelines implement `_execute()`; `run()` is the only
+    method Airflow / scripts / other pipelines should call.
+    """
+
+    def __init__(self, config: dict[str, Any]):
+        self.config = config
+        self.logger = get_logger(self.__class__.__name__)
+        self.name = self.__class__.__name__
+
+    @abstractmethod
+    def _execute(self) -> dict[str, Any]:
+        """Business logic for this specific pipeline stage.
+        Returns a dict of artifacts/metadata to attach to PipelineResult."""
+        raise NotImplementedError
+
+    def run(self) -> PipelineResult:
+        started_at = datetime.utcnow()
+        self.logger.info(f"[{self.name}] starting")
+        try:
+            output = self._execute()
+            result = PipelineResult(
+                pipeline_name=self.name,
+                status="success",
+                started_at=started_at,
+                finished_at=datetime.utcnow(),
+                artifacts=output.get("artifacts", {}),
+                metadata=output.get("metadata", {}),
+            )
+            self.logger.info(f"[{self.name}] completed successfully")
+            return result
+        except Exception as exc:  # noqa: BLE001 - intentional top-level boundary
+            self.logger.exception(f"[{self.name}] failed")
+            return PipelineResult(
+                pipeline_name=self.name,
+                status="failed",
+                started_at=started_at,
+                finished_at=datetime.utcnow(),
+                error=str(exc),
+            )
+```
+
+```python
+# pipelines/ingestion_pipeline.py
+from pipelines.base_pipeline import BasePipeline
+from database.loader import CSVLoader
+from database.connection import Database
+
+
+class IngestionPipeline(BasePipeline):
+    """Move raw CSVs into PostgreSQL as transactions_raw / identity_raw."""
+
+    def _execute(self) -> dict:
+        db = Database(self.config["database"])
+        loader = CSVLoader(self.config["paths"]["raw_data"])
+
+        loader.load_transactions(db, table="transactions_raw")
+        loader.load_identity(db, table="identity_raw")
+
+        return {
+            "artifacts": {"tables": ["transactions_raw", "identity_raw"]},
+            "metadata": {"rows_loaded": loader.total_rows_loaded},
+        }
+```
+
+### 8.3 The 14 pipeline classes (one file, one class, one responsibility each)
+
+| File | Class | Responsibility | Key output |
+|---|---|---|---|
+| `ingestion_pipeline.py` | `IngestionPipeline` | CSV → PostgreSQL | `transactions_raw`, `identity_raw` |
+| `validation_pipeline.py` | `ValidationPipeline` | schema/null/dupe/type checks; **stops the DAG on failure** | `validation_report.json` |
+| `cleaning_pipeline.py` | `CleaningPipeline` | fill/convert/normalize; DB stays untouched | `cleaned.parquet` |
+| `feature_engineering_pipeline.py` | `FeatureEngineeringPipeline` | time/amount/email/device/behavioral features | `features.parquet` |
+| `dataset_builder_pipeline.py` | `DatasetBuilderPipeline` | split (group-aware), encode, scale, sample | `train/validation/test.parquet` |
+| `training_pipeline.py` | `TrainingPipeline` | train XGBoost/LightGBM, tune, log to MLflow | `model.pkl` |
+| `evaluation_pipeline.py` | `EvaluationPipeline` | ROC-AUC, PR-AUC, F1, recall, confusion matrix | `evaluation.json` |
+| `calibration_pipeline.py` | `CalibrationPipeline` | Platt/isotonic calibration of probabilities | `calibrated_model.pkl` |
+| `registration_pipeline.py` | `RegistrationPipeline` | champion/challenger compare, register, promote | MLflow Model Registry entry |
+| `inference_pipeline.py` | `InferencePipeline` | new transaction → features → model → risk score | prediction object |
+| `explainability_pipeline.py` | `ExplainabilityPipeline` | SHAP → analyst view → business explanation | `{risk_score, reasons, confidence, model_version}` |
+| `monitoring_pipeline.py` | `MonitoringPipeline` | data/prediction drift, feature distribution, live metrics (via Evidently) | drift/monitoring reports |
+| `retraining_pipeline.py` | `RetrainingPipeline` | scheduled or drift-triggered: retrain → evaluate → register → deploy | new registered model |
+| `deployment_pipeline.py` | `DeploymentPipeline` | build image, push, deploy API, update K8s | deployed service |
+
+Pipeline dependency order (this is the Airflow DAG shape):
+
+```
+Ingestion → Validation → Cleaning → Feature Engineering → Dataset Builder
+→ Training → Evaluation → Calibration → Registration → Deployment
+→ Inference → Explainability → Monitoring → Retraining
+```
+
+`training_pipeline.py` (DAG-level Airflow orchestration) covers
+Validate → Feature Engineering → Train → Evaluate → Register.
+`retraining_pipeline.py` reuses the same classes rather than duplicating
+logic — it's a re-invocation of the training path triggered by
+`monitoring_pipeline.py` detecting drift, or by a schedule.
+
+### 8.4 Rules for every pipeline class
+- One class per file, file name matches class name in snake_case.
+- No business logic inside `__init__` — only wiring/config. All real work
+  happens in `_execute()`, called only via `run()`.
+- No pipeline reaches into another pipeline's internals — they communicate
+  only through their declared outputs (files in `data/`, models in the
   registry, reports in `monitoring/`).
 - No hardcoded paths, table names, thresholds, or hyperparameters inside
   pipeline classes — everything comes from `configs/*.yaml`.
@@ -403,13 +598,14 @@ environment variables / secrets management for anything beyond local dev.)*
 
 ---
 
+
 ## 12. Project Status & Progress Tracker
 
 This section lists the implemented tasks and what needs to be worked on next, so new chats or other agents can seamlessly pick up the context.
 
 ### Current Progress
 
-1. **Database Setup**: Completed. Raw transactions loaded into PostgreSQL (`fraud_risk` DB, user `fraud_user`).
+1. **Database Setup**: ✅ Complete. Raw transactions loaded into PostgreSQL (`fraud_risk` DB, user `fraud_user`).
 
 2. **Ingestion Pipeline (`pipelines/ingestion_pipeline.py`)**: ✅ Complete.
    - Loads raw CSVs into PostgreSQL. Verified working.
@@ -432,6 +628,27 @@ This section lists the implemented tasks and what needs to be worked on next, so
    - `scripts/run_experiments.py`: Loops over all baselines and ranks them by PR-AUC.
    - `scripts/tune.py`: Uses **Optuna** to independently hyperparameter-tune XGBoost, LightGBM, and Random Forest with clean `tqdm` progress bars.
 
+8. **Registration Pipeline (`pipelines/registration_pipeline.py`)**: ✅ Complete.
+   - Implements Champion/Challenger promotion showdown in MLflow Model Registry based on PR-AUC.
+
+9. **Serving Layer & Explainability (`api/`)**: ✅ Complete.
+   - High-throughput FastAPI app meeting strict <100ms latency SLA.
+   - Lifespan (`@asynccontextmanager`) in-memory model loading and Redis pool warming.
+   - Pydantic V2 data contracts (`api/schemas.py`) for single & vectorized batch requests.
+   - `RequestTimingAndIDMiddleware` injecting `X-Request-ID` and `X-Response-Time-Ms`.
+   - Dedicated `/predict`, `/predict/batch`, `/explain` (SHAP), `/health`, and `/ready` routes.
+   - Standalone interactive Web UI Dashboard served at `/ui` with batch throughput telemetry.
+   - Zero lint errors (`ruff check` clean) and automated integration tests passing (`tests/integration/test_api.py`).
+
+10. **Monitoring & Drift Detection Pipeline (`pipelines/monitoring_pipeline.py`)**: ✅ Complete.
+    - Uses **Evidently AI** (`DataDefinition`, `Dataset.from_pandas`, `DataDriftPreset`) to monitor covariate shift and feature distributions.
+    - Generates interactive HTML and programmatic JSON drift reports in `monitoring/reports/`.
+    - Evaluates `drift_share` against threshold (`configs/monitoring.yaml`) to output automated retraining triggers.
+
+11. **Retraining Pipeline (`pipelines/retraining_pipeline.py`)**: ✅ Complete.
+    - Orchestrates end-to-end retraining flow: [Drift Check] ➔ [Train Challenger] ➔ [Evaluate Metrics] ➔ [Champion vs. Challenger Showdown].
+    - Reuses existing pipeline classes cleanly without code duplication.
+
 ### Running Pipeline Scripts / Tests
 
 Always activate the conda environment and set `PYTHONPATH` before running any script:
@@ -440,22 +657,30 @@ Always activate the conda environment and set `PYTHONPATH` before running any sc
 conda activate financial_risk_intelligence
 $env:PYTHONPATH = "."
 
-# Run tuning on LightGBM for 20 trials
-python scripts/tune.py --model lightgbm --trials 20
+# Run Monitoring Pipeline
+python pipelines/monitoring_pipeline.py
+
+# Run Retraining Pipeline (forced or drift-triggered)
+python pipelines/retraining_pipeline.py
+
+# Run API Tests
+pytest tests/integration/test_api.py
+
+# Start FastAPI Server
+python main.py
 ```
 
 ### Known Issues / Gotchas
 
 - **LightGBM Categorical Error during Inference**: (FIXED) The test inference script previously failed with `ValueError: train and valid dataset categorical_feature do not match.`
-  - **Root Cause**: During training, Pandas strings were explicitly cast to `category` dtype. LightGBM internally maps these strings to integer indices and strictly validates that any incoming Pandas DataFrame has the exact same categorical names and schemas.
-  - **The Fix**: Instead of wrestling with Pandas `.astype("category")`, we bypass the validation entirely. We manually hash string categories into numeric codes (`hash(str) % 2**31`), fill missing values with `-1.0`, and pass a pure `float64` numpy array (`df.values`) into `model.predict_proba()`. LightGBM accepts numeric arrays without checking metadata!
+  - **The Fix**: Instead of wrestling with Pandas `.astype("category")`, we bypass the validation entirely. We manually hash string categories into numeric codes (`hash(str) % 2**31`), fill missing values with `-1.0`, and pass a pure `float64` numpy array (`df.values`) into `model.predict_proba()`.
+- **Async Event Loop Protection**: ML model inference and SHAP calculations are CPU-bound. In FastAPI route handlers, always wrap them in `await asyncio.to_thread(func, *args)` to prevent freezing the single-threaded event loop.
+- **Risk Score Calibration**: Fraud prevalence in IEEE-CIS is ~3.5%. Raw probabilities output by tree models are compressed. `InferencePipeline._calculate_calibrated_risk()` maps probabilities relative to the 3.5% baseline into clear 0–100 risk scores (Low: <3.5%, Medium: 3.5–8%, High: >=8%).
 - **Do NOT use `SELECT *`** when loading from PostgreSQL in this project — the transaction table has 394 columns and will trigger `ArrayMemoryError` on low-RAM machines.
 - **MLflow Tracking Backend**: We use `sqlite:///mlflow.db` because `./mlruns` is deprecated by MLflow for UI usage.
-- **PR-AUC Baseline**: In this dataset, fraud prevalence is ~3.5%. Therefore, a PR-AUC of `0.035` is random guessing. A score of `0.45+` is considered extremely strong. Always prioritize Recall (True Positives) over raw Accuracy.
 
 ### Next Steps & Tasks
 
-- [ ] **Lock the Champion Model**: Review Optuna MLflow logs, pick the absolute best model (balancing PR-AUC and Recall), update `configs/model.yaml` with its parameters, and train the official final model.
-- [ ] **FastAPI Serving (`api/`)**: Build the `/predict` endpoint based on the approved `implementation_plan.md`. **Crucial Rule:** It must return a risk score in `<100ms`. We will use FastAPI `BackgroundTasks` to update the Redis Feature Store *after* the request completes to prevent latency spikes and data pollution.
-- [ ] **Registration Pipeline (`pipelines/registration_pipeline.py`)**: Formally promote the champion model into the MLflow Model Registry (so the API can pull the "Production" tag).
-- [ ] **Explainability Pipeline (`pipelines/explainability_pipeline.py`)**: Implement SHAP to generate human-readable reasons for fraud flags (e.g., "Transaction amount is 4.2x customer average"). Must be decoupled from raw prediction.
+- [ ] **Airflow Orchestration DAG (`airflow/dags/`)**: Create the production DAG connecting all 14 pipeline classes in sequence (Ingest ➔ Validate ➔ Clean ➔ Engineer ➔ Train ➔ Evaluate ➔ Register).
+- [ ] **Data Versioning (DVC)**: Setup `dvc.yaml` stages to track raw data, engineered features, and model artifact lineage.
+- [ ] **Containerization & Parity (`Dockerfile`, `docker-compose.yml`)**: Package PostgreSQL, Redis, MLflow, and FastAPI Serving API into multi-container Docker Compose.

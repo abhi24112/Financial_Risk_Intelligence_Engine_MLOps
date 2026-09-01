@@ -1,0 +1,12 @@
+{
+    "pipeline_name": "RetrainingPipeline",
+    "status": "success",
+    "started_at": "2026-09-01T12:00:02.727827+00:00",
+    "finished_at": "2026-09-01T12:00:02.728829+00:00",
+    "artifacts": {},
+    "metadata": {
+        "action": "skipped",
+        "reason": "Monitoring report checked: No data drift detected (14.9% drifted <= threshold). Retraining not needed."
+    },
+    "error": null
+}
