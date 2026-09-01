@@ -1,0 +1,16 @@
+# params.yaml - DVC Stage Parameters & Reproducibility Knobs
+
+dataset:
+  target: "isFraud"
+  group_col: "uid_card"
+  split_folds: 7
+  random_state: 42
+
+train:
+  model_type: "xgboost"
+  random_state: 42
+  max_depth: 5
+  learning_rate: 0.05
+  n_estimators: 150
+  subsample: 0.8
+  colsample_bytree: 0.8

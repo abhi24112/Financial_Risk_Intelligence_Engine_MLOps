@@ -45,6 +45,10 @@ dataset/*.pickle
 
 # Trained models and generated model artifacts
 models/
+models/*.skops
+models/*.pkl
+!models/*.dvc
+!models/**/.gitignore
 *.joblib
 *.pkl
 *.pickle

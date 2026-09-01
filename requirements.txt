@@ -23,6 +23,7 @@ redis
 mlflow
 shap
 evidently>=0.7.0
+dvc==3.67.1
 
 # API & Serving
 fastapi>=0.110.0

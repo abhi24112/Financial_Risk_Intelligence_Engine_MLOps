@@ -1,0 +1,66 @@
+schema: '2.0'
+stages:
+  cleaning:
+    cmd: python pipelines/cleaning_pipeline.py
+    deps:
+    - path: database/connection.py
+      hash: md5
+      md5: 94f8cf6d55ca890a0ceabe1e0589c5b5
+      size: 1607
+    - path: database/loader.py
+      hash: md5
+      md5: f2a4080f5c0b5fde1eff5c5ff68e5c1d
+      size: 1121
+    - path: pipelines/cleaning_pipeline.py
+      hash: md5
+      md5: 208620a9931492584aeca038f14316e4
+      size: 6613
+    outs:
+    - path: dataset/interim/cleaned.parquet
+      hash: md5
+      md5: 78956f60fe5b62dac39ea6e36da77830
+      size: 57107878
+  feature_engineering:
+    cmd: python pipelines/feature_engineering_pipeline.py
+    deps:
+    - path: dataset/interim/cleaned.parquet
+      hash: md5
+      md5: 78956f60fe5b62dac39ea6e36da77830
+      size: 57107878
+    - path: pipelines/feature_engineering_pipeline.py
+      hash: md5
+      md5: 9f52e7530b7f985f92d2200e2d458919
+      size: 7315
+    outs:
+    - path: dataset/processed/features.parquet
+      hash: md5
+      md5: e6d8847485bc80e2fcfc20016bf42678
+      size: 80359684
+  dataset_builder:
+    cmd: python pipelines/dataset_builder_pipeline.py
+    deps:
+    - path: dataset/processed/features.parquet
+      hash: md5
+      md5: e6d8847485bc80e2fcfc20016bf42678
+      size: 80359684
+    - path: pipelines/dataset_builder_pipeline.py
+      hash: md5
+      md5: 430d28b8a16c30f322d9bc02456ecb52
+      size: 3818
+    params:
+      params.yaml:
+        dataset.random_state: 42
+        dataset.split_folds: 7
+    outs:
+    - path: dataset/processed/test.parquet
+      hash: md5
+      md5: ed2ba522ef28f5c51ae2e4262ec0ac18
+      size: 12180847
+    - path: dataset/processed/train.parquet
+      hash: md5
+      md5: 9369c0a663aba7d9a89d2c6ce7d5f88d
+      size: 58068741
+    - path: dataset/processed/val.parquet
+      hash: md5
+      md5: 4913b82d9fae4a8a8a6e75ef6d277dbe
+      size: 12351700

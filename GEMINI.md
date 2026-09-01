@@ -649,6 +649,14 @@ This section lists the implemented tasks and what needs to be worked on next, so
     - Orchestrates end-to-end retraining flow: [Drift Check] ➔ [Train Challenger] ➔ [Evaluate Metrics] ➔ [Champion vs. Challenger Showdown].
     - Reuses existing pipeline classes cleanly without code duplication.
 
+12. **Data Versioning & Pipeline Lineage (`dvc.yaml`, `params.yaml`)**: ✅ Complete.
+    - Initialized DVC tracking with `.dvcignore` excluding caches/logs/db.
+    - Defined parameterization knobs in `params.yaml`.
+    - Codified reproducible data DAG stages (`cleaning` ➔ `feature_engineering` ➔ `dataset_builder`).
+    - Explicitly tracked Champion (`models/production_model.skops`) and Challenger (`models/challenger_model.skops`) model weights alongside Parquet datasets.
+    - Configured local remote storage (`../dvc_remote_storage`) and pushed all 7 data and model artifacts (`dvc push`).
+    - Verified `dvc status` reports `Data and pipelines are up to date.`
+
 ### Running Pipeline Scripts / Tests
 
 Always activate the conda environment and set `PYTHONPATH` before running any script:
@@ -656,6 +664,12 @@ Always activate the conda environment and set `PYTHONPATH` before running any sc
 ```powershell
 conda activate financial_risk_intelligence
 $env:PYTHONPATH = "."
+
+# View DVC Pipeline DAG
+dvc dag
+
+# Check DVC Stage Statuses
+dvc status
 
 # Run Monitoring Pipeline
 python pipelines/monitoring_pipeline.py
@@ -681,6 +695,6 @@ python main.py
 
 ### Next Steps & Tasks
 
-- [ ] **Airflow Orchestration DAG (`airflow/dags/`)**: Create the production DAG connecting all 14 pipeline classes in sequence (Ingest ➔ Validate ➔ Clean ➔ Engineer ➔ Train ➔ Evaluate ➔ Register).
-- [ ] **Data Versioning (DVC)**: Setup `dvc.yaml` stages to track raw data, engineered features, and model artifact lineage.
-- [ ] **Containerization & Parity (`Dockerfile`, `docker-compose.yml`)**: Package PostgreSQL, Redis, MLflow, and FastAPI Serving API into multi-container Docker Compose.
+- [ ] **Containerization & Parity (`Dockerfile`, `docker-compose.yml`)**: Package PostgreSQL, Redis, MLflow, FastAPI Serving API, and Airflow into multi-container Docker Compose.
+- [ ] **Airflow Orchestration DAG (`airflow/dags/financial_risk_dag.py`)**: Create the production DAG connecting all pipeline classes in sequence (Ingest ➔ Validate ➔ Clean ➔ Engineer ➔ Train ➔ Evaluate ➔ Register).
+

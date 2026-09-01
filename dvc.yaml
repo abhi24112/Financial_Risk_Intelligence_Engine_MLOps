@@ -1,0 +1,33 @@
+# dvc.yaml - Adaptive Financial Risk Intelligence Engine Data Pipeline Lineage
+
+stages:
+  cleaning:
+    cmd: python pipelines/cleaning_pipeline.py
+    deps:
+      - pipelines/cleaning_pipeline.py
+      - database/loader.py
+      - database/connection.py
+    outs:
+      - dataset/interim/cleaned.parquet
+
+  feature_engineering:
+    cmd: python pipelines/feature_engineering_pipeline.py
+    deps:
+      - pipelines/feature_engineering_pipeline.py
+      - dataset/interim/cleaned.parquet
+    outs:
+      - dataset/processed/features.parquet
+
+  dataset_builder:
+    cmd: python pipelines/dataset_builder_pipeline.py
+    deps:
+      - pipelines/dataset_builder_pipeline.py
+      - dataset/processed/features.parquet
+    params:
+      - dataset.split_folds
+      - dataset.random_state
+    outs:
+      - dataset/processed/train.parquet
+      - dataset/processed/val.parquet
+      - dataset/processed/test.parquet
+
