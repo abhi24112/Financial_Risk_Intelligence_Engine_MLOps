@@ -92,45 +92,71 @@ class InferencePipeline(BasePipeline):
             pass
 
     def _load_champion_model(self):
-        """Loads the Production model from the registry, with fallbacks."""
+        """Loads the Champion model from local storage or MLflow registry, with fallbacks."""
+        # 1. Primary Strategy: Load the local production .skops champion model from models/ directory
+        models_dir = Path(self.config.get("models_dir", "models"))
+        production_skops_path = models_dir / "production_model.skops"
+        if production_skops_path.exists():
+            self.logger.info(f"Loading champion model from local artifact: {production_skops_path}")
+            try:
+                import skops.io as sio
+
+                trusted = sio.get_untrusted_types(file=str(production_skops_path))
+                pipeline = sio.load(str(production_skops_path), trusted=trusted)
+                self.logger.info("Local champion .skops model loaded successfully.")
+                return pipeline
+            except Exception as e:
+                self.logger.warning(f"Could not load local .skops model: {e}. Trying MLflow registry.")
+
+        # 2. Secondary Strategy: Load from MLflow Model Registry
         model_uri = f"models:/{self.model_name}/Production"
         self.logger.info(f"Loading champion model into memory from {model_uri}")
 
         try:
             # We use sklearn flavor to get the full pipeline including any preprocessors
             pipeline = mlflow_sklearn.load_model(model_uri)
-            self.logger.info("Model loaded successfully.")
+            self.logger.info("Model loaded successfully from MLflow registry.")
             return pipeline
         except Exception as e:
-            self.logger.warning(f"Could not load Production model. Error: {e}. Falling back to best run.")
+            self.logger.warning(f"Could not load Production model from registry: {e}. Falling back to best run.")
 
-        # Fallback 1: Search MLflow experiments for the best run
+        # 3. Fallback 1: Search MLflow experiments for the best run
         try:
             client = MlflowClient()
             experiment_name = self.config.get("experiment_name", "Fraud_Detection_Training")
             experiment = client.get_experiment_by_name(experiment_name)
             if experiment is not None:
-                runs = client.search_runs(experiment_ids=[experiment.experiment_id], order_by=["metrics.test_pr_auc DESC"], max_results=1)
+                runs = client.search_runs(
+                    experiment_ids=[experiment.experiment_id],
+                    order_by=["metrics.test_pr_auc DESC"],
+                    max_results=1,
+                )
                 if runs:
                     fallback_uri = f"runs:/{runs[0].info.run_id}/model"
                     self.logger.info(f"Loaded fallback model from {fallback_uri}")
                     return mlflow_sklearn.load_model(fallback_uri)
         except Exception as e2:
-            self.logger.warning(f"MLflow fallback also failed: {e2}. Trying local .pkl files.")
+            self.logger.warning(f"MLflow fallback also failed: {e2}. Trying local fallback files.")
 
-        # Fallback 2: Load a local .pkl model from models/ directory
-
-        models_dir = Path(self.config.get("models_dir", "models"))
-        # Prefer lightgbm > xgboost > random_forest (in tuning order)
-        for model_file in ["lightgbm.pkl", "xgboost.pkl", "random_forest.pkl"]:
+        # 4. Fallback 2: Load local fallback files
+        for model_file in ["challenger_model.skops", "lightgbm.pkl", "xgboost.pkl", "random_forest.pkl"]:
             local_path = models_dir / model_file
             if local_path.exists():
                 self.logger.info(f"Loading local model from {local_path}")
-                pipeline = joblib.load(local_path)
-                self.logger.info("Local model loaded successfully.")
+                if local_path.suffix == ".skops":
+                    import skops.io as sio
+
+                    trusted = sio.get_untrusted_types(file=str(local_path))
+                    pipeline = sio.load(str(local_path), trusted=trusted)
+                else:
+                    pipeline = joblib.load(local_path)
+                self.logger.info("Local fallback model loaded successfully.")
                 return pipeline
 
-        raise RuntimeError("No model could be loaded. MLflow registry, experiment search, " "and local .pkl files all failed. Re-run training first.")
+        raise RuntimeError(
+            "No model could be loaded. Local models/production_model.skops, MLflow registry, "
+            "experiment search, and local fallback files all failed. Re-run training first."
+        )
 
     def _build_features(self, raw_tx: dict[str, Any]) -> pd.DataFrame:
         """
