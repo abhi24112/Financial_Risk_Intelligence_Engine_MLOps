@@ -657,6 +657,13 @@ This section lists the implemented tasks and what needs to be worked on next, so
     - Configured local remote storage (`../dvc_remote_storage`) and pushed all 7 data and model artifacts (`dvc push`).
     - Verified `dvc status` reports `Data and pipelines are up to date.`
 
+13. **Containerization & Multi-Service Parity (`docker-compose.yml`, `docker/`)**: ✅ Complete.
+    - Created `docker/Dockerfile.api` with Python 3.11, OpenMP/libgomp runtimes, and healthcheck probes.
+    - Created `docker/Dockerfile.mlflow` with SQLite backend and volume mounting for artifact tracking.
+    - Configured `docker-compose.yml` linking 4 core services (`postgres`, `redis`, `mlflow`, `api`) over an isolated bridge network (`risk_network`).
+    - Standardized `.dockerignore`, `.env.example`, and `.env`.
+    - Documented architecture and commands in `Doc/pipeline_docs/docker_implementation.md`.
+
 ### Running Pipeline Scripts / Tests
 
 Always activate the conda environment and set `PYTHONPATH` before running any script:
@@ -671,6 +678,12 @@ dvc dag
 # Check DVC Stage Statuses
 dvc status
 
+# Start Full Docker Compose Stack
+docker compose up -d
+
+# Check Container Statuses
+docker compose ps
+
 # Run Monitoring Pipeline
 python pipelines/monitoring_pipeline.py
 
@@ -680,7 +693,7 @@ python pipelines/retraining_pipeline.py
 # Run API Tests
 pytest tests/integration/test_api.py
 
-# Start FastAPI Server
+# Start FastAPI Server Locally
 python main.py
 ```
 
@@ -695,6 +708,6 @@ python main.py
 
 ### Next Steps & Tasks
 
-- [ ] **Containerization & Parity (`Dockerfile`, `docker-compose.yml`)**: Package PostgreSQL, Redis, MLflow, FastAPI Serving API, and Airflow into multi-container Docker Compose.
 - [ ] **Airflow Orchestration DAG (`airflow/dags/financial_risk_dag.py`)**: Create the production DAG connecting all pipeline classes in sequence (Ingest ➔ Validate ➔ Clean ➔ Engineer ➔ Train ➔ Evaluate ➔ Register).
+- [ ] **Airflow Containerization**: Attach the Airflow service to `docker-compose.yml` once DAGs are ready.
 
