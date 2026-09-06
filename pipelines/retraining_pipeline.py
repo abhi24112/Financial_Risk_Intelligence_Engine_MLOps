@@ -6,9 +6,6 @@ from pipelines.base_pipeline import BasePipeline
 from pipelines.evaluation_pipeline import EvaluationPipeline
 from pipelines.registration_pipeline import RegistrationPipeline
 from pipelines.training_pipeline import TrainingPipeline
-from shared import configure_logging
-
-configure_logging(log_file="retraining.log")
 
 
 class RetrainingPipeline(BasePipeline):

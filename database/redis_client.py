@@ -5,10 +5,6 @@ from typing import Any, cast
 import pandas as pd
 import redis
 
-from shared import configure_logging
-
-configure_logging(log_file="redis_client.log")
-
 
 class RedisClient:
     """

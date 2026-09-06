@@ -4,9 +4,7 @@ from typing import Any
 from database.connection import Database
 from database.loader import CSVLoader
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging, constants
-
-configure_logging(log_file="ingestion_pipeline.log")
+from shared import constants
 
 
 class IngestionPipeline(BasePipeline):
@@ -34,10 +32,7 @@ class IngestionPipeline(BasePipeline):
     def _validate_database_connection(self) -> None:
         self.logger.info("Testing Database connection")
         if not self.database.test_connection():
-            raise ConnectionError(
-                "Could not connect to PostgreSQL. "
-                "Check DATABASE_URL or ensure PostgreSQL is running."
-            )
+            raise ConnectionError("Could not connect to PostgreSQL. " "Check DATABASE_URL or ensure PostgreSQL is running.")
         self.logger.info("Database connection successful.")
 
     def _load_raw_data(self) -> None:

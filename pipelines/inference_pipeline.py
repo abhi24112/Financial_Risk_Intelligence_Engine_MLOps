@@ -11,9 +11,6 @@ from mlflow.tracking import MlflowClient
 
 from feature_store.online_store import OnlineFeatureStore
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging
-
-configure_logging(log_file="inference.log")
 
 
 class InferencePipeline(BasePipeline):

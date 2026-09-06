@@ -8,9 +8,7 @@ import pandas as pd
 from mlflow.tracking import MlflowClient
 
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging, constants
-
-configure_logging(log_file="explainability.log")
+from shared import constants
 
 
 class ExplainabilityPipeline(BasePipeline):

@@ -1,15 +1,15 @@
 {
     "pipeline_name": "RegistrationPipeline",
     "status": "success",
-    "started_at": "2026-08-24T12:10:03.021934+00:00",
-    "finished_at": "2026-08-24T12:10:03.647759+00:00",
+    "started_at": "2026-09-06T08:45:48.425191+00:00",
+    "finished_at": "2026-09-06T08:45:48.565140+00:00",
     "artifacts": {},
     "metadata": {
-        "challenger_run_id": "2a675620138b4219b4cd38258ccd83ca",
-        "challenger_pr_auc": 0.48720082231287554,
-        "champion_pr_auc": 0.49130001016633873,
-        "action": "promoted",
-        "new_production_version": 2
+        "challenger_run_id": "6abbaaa1c46d456281321bed6f48d3ac",
+        "challenger_pr_auc": 0.5032586031023578,
+        "champion_pr_auc": 0.5032586031023578,
+        "action": "rejected",
+        "champion_version": 1
     },
     "error": null
 }

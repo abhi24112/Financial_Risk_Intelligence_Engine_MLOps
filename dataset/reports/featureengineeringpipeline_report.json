@@ -1,0 +1,32 @@
+{
+    "pipeline_name": "FeatureEngineeringPipeline",
+    "status": "success",
+    "started_at": "2026-09-06T08:44:39.964744+00:00",
+    "finished_at": "2026-09-06T08:44:43.518604+00:00",
+    "artifacts": {},
+    "metadata": {
+        "total_rows": 50000,
+        "total_features": 300,
+        "new_features_created": 17,
+        "new_features_list": [
+            "uid_card_device",
+            "amount_log",
+            "transaction_dayofweek",
+            "uid_card",
+            "identity_avg_amount",
+            "is_weekend",
+            "is_new_email",
+            "transactions_last_24h",
+            "uid_card_email",
+            "identity_transaction_count",
+            "address_missing",
+            "time_since_last_transaction",
+            "is_new_device",
+            "amount_is_round",
+            "amount_vs_identity_avg",
+            "transaction_hour",
+            "amount_last_24h"
+        ]
+    },
+    "error": null
+}

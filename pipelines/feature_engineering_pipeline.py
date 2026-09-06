@@ -5,9 +5,7 @@ import numpy as np
 import pandas as pd
 
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging, constants
-
-configure_logging(log_file="feature_engineering.log")
+from shared import constants
 
 
 class FeatureEngineeringPipeline(BasePipeline):

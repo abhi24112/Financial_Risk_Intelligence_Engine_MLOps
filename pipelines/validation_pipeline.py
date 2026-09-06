@@ -1,12 +1,8 @@
 from typing import Any
 
-import pandas as pd
-
 from database.connection import Database
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging, constants
-
-configure_logging(log_file="validation.log")
+from shared import constants
 
 
 class ValidationPipeline(BasePipeline):
@@ -43,19 +39,14 @@ class ValidationPipeline(BasePipeline):
             # BasePipeline currently captures exceptions. If we want metadata on failure,
             # we might just return normally but maybe the orchestrator handles it.
             # But according to GEMINI.md, validation stops the DAG on failure.
-            raise ValueError(
-                f"Validation failed due to data quality issues. Details: {self.report_data}"
-            )
+            raise ValueError(f"Validation failed due to data quality issues. Details: {self.report_data}")
 
         return {"metadata": self.report_data}
 
     def _validate_database_connection(self) -> None:
         self.logger.info("Testing Database connection")
         if not self.database.test_connection():
-            raise ConnectionError(
-                "Could not connect to PostgreSQL. "
-                "Check DATABASE_URL or ensure PostgreSQL is running."
-            )
+            raise ConnectionError("Could not connect to PostgreSQL. " "Check DATABASE_URL or ensure PostgreSQL is running.")
         self.logger.info("Database connection successful.")
 
     def _validate_transactions(self) -> bool:
@@ -66,7 +57,7 @@ class ValidationPipeline(BasePipeline):
         try:
             # Basic row count check
             query_count = f'SELECT COUNT(*) as count FROM "{table_name}"'
-            count_df = pd.read_sql(query_count, self.database.get_engine())
+            count_df = self.database.read_sql(query_count)
             total_rows = int(count_df.iloc[0]["count"])
             self.logger.info(f"Total rows in {table_name}: {total_rows}")
 
@@ -82,7 +73,7 @@ class ValidationPipeline(BasePipeline):
                 GROUP BY "TransactionID" 
                 HAVING COUNT(*) > 1
             """
-            dupes_df = pd.read_sql(query_dupes, self.database.get_engine())
+            dupes_df = self.database.read_sql(query_dupes)
             dupes_count = len(dupes_df)
 
             # Check for nulls in critical columns
@@ -92,7 +83,7 @@ class ValidationPipeline(BasePipeline):
                     SUM(CASE WHEN "isFraud" IS NULL THEN 1 ELSE 0 END) as null_targets
                 FROM "{table_name}"
             """
-            nulls_df = pd.read_sql(query_nulls, self.database.get_engine())
+            nulls_df = self.database.read_sql(query_nulls)
             null_ids = int(nulls_df.iloc[0]["null_ids"])
             null_targets = int(nulls_df.iloc[0]["null_targets"])
 
@@ -134,7 +125,7 @@ class ValidationPipeline(BasePipeline):
         try:
             # Basic row count check
             query_count = f'SELECT COUNT(*) as count FROM "{table_name}"'
-            count_df = pd.read_sql(query_count, self.database.get_engine())
+            count_df = self.database.read_sql(query_count)
             total_rows = int(count_df.iloc[0]["count"])
             self.logger.info(f"Total rows in {table_name}: {total_rows}")
 
@@ -150,7 +141,7 @@ class ValidationPipeline(BasePipeline):
                 GROUP BY "TransactionID" 
                 HAVING COUNT(*) > 1
             """
-            dupes_df = pd.read_sql(query_dupes, self.database.get_engine())
+            dupes_df = self.database.read_sql(query_dupes)
             dupes_count = len(dupes_df)
 
             # Check for nulls in critical columns
@@ -158,7 +149,7 @@ class ValidationPipeline(BasePipeline):
                 SELECT SUM(CASE WHEN "TransactionID" IS NULL THEN 1 ELSE 0 END) as null_ids
                 FROM "{table_name}"
             """
-            nulls_df = pd.read_sql(query_nulls, self.database.get_engine())
+            nulls_df = self.database.read_sql(query_nulls)
             null_ids = int(nulls_df.iloc[0]["null_ids"])
 
             self.report_data[table_name] = {

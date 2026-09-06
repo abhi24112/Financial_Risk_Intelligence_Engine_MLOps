@@ -6,9 +6,7 @@ import pandas as pd
 from sklearn.model_selection import StratifiedGroupKFold
 
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging, constants
-
-configure_logging(log_file="data_builder.log")
+from shared import constants
 
 
 class DatasetBuilderPipeline(BasePipeline):

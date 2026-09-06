@@ -1,15 +1,15 @@
 {
     "pipeline_name": "TrainingPipeline",
     "status": "success",
-    "started_at": "2026-09-01T14:55:29.440874+00:00",
-    "finished_at": "2026-09-01T14:57:28.020459+00:00",
+    "started_at": "2026-09-06T08:45:03.977830+00:00",
+    "finished_at": "2026-09-06T08:45:30.895560+00:00",
     "artifacts": {},
     "metadata": {
         "model_type": "xgboost",
-        "mlflow_run_id": "e34fb33fb55f4e6f88144fe81b2a8925",
-        "local_model_path": "models\\xgboost.pkl",
-        "train_rows": 421816,
-        "val_rows": 84361,
+        "mlflow_run_id": "6abbaaa1c46d456281321bed6f48d3ac",
+        "local_model_path": "models/xgboost.pkl",
+        "train_rows": 35714,
+        "val_rows": 7143,
         "features_used": 294
     },
     "error": null

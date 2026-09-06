@@ -8,9 +8,7 @@ import pandas as pd
 
 from ml.training.trainer import ModelTrainer
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging, constants
-
-configure_logging(log_file="training.log")
+from shared import constants
 
 
 class TrainingPipeline(BasePipeline):
@@ -104,16 +102,7 @@ class TrainingPipeline(BasePipeline):
             joblib.dump(pipeline, local_model_path)
 
             # 7. Log Model to MLflow
-            # We log the entire scikit-learn Pipeline so preprocessing (if any) is preserved
-            # skops requires whitelisting non-sklearn types to save them securely
-            trusted_types = [
-                "xgboost.core.Booster",
-                "xgboost.sklearn.XGBClassifier",
-                "lightgbm.basic.Booster",
-                "lightgbm.sklearn.LGBMClassifier",
-                "collections.OrderedDict",
-            ]
-            mlflow_sklearn.log_model(pipeline, name="model", skops_trusted_types=trusted_types)
+            mlflow_sklearn.log_model(sk_model=pipeline, artifact_path="model")
 
             active_run = mlflow.active_run()
             run_id = active_run.info.run_id if active_run else "unknown"

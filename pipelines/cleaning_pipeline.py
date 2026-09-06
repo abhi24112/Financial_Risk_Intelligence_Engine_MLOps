@@ -5,9 +5,7 @@ import pandas as pd
 
 from database.connection import Database
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging, constants
-
-configure_logging(log_file="cleaning.log")
+from shared import constants
 
 
 class CleaningPipeline(BasePipeline):
@@ -86,16 +84,16 @@ class CleaningPipeline(BasePipeline):
     # Loading Transaction Dataset
     def _load_transaction_data(self) -> pd.DataFrame:
         self.logger.info("Loading Transaction dataset from table: %s", self.trans_table_name)
-        query = f"SELECT * FROM {self.trans_table_name}"
-        df = pd.read_sql(query, self.database.get_engine())
+        query = f'SELECT * FROM "{self.trans_table_name}"'
+        df = self.database.read_sql(query)
         self.logger.info(f"Transaction data is loaded: {len(df)} rows, {len(df.columns.to_list())} columns")
         return df
 
     # Loading Identity Dataset
     def _load_identity_data(self) -> pd.DataFrame:
         self.logger.info("Loading identity dataset from table: %s", self.iden_table_name)
-        query = f"SELECT * FROM {self.iden_table_name}"
-        df = pd.read_sql(query, self.database.get_engine())
+        query = f'SELECT * FROM "{self.iden_table_name}"'
+        df = self.database.read_sql(query)
         self.logger.info(f"identity data is loaded: {len(df)} rows, {len(df.columns.to_list())} columns")
         return df
 

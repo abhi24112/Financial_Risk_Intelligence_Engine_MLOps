@@ -5,9 +5,6 @@ from mlflow.exceptions import MlflowException
 from mlflow.tracking import MlflowClient
 
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging
-
-configure_logging(log_file="registration.log")
 
 
 class RegistrationPipeline(BasePipeline):

@@ -8,9 +8,7 @@ import pandas as pd
 
 from ml.evaluation.evaluator import ModelEvaluator
 from pipelines.base_pipeline import BasePipeline
-from shared import configure_logging, constants
-
-configure_logging(log_file="evaluation.log")
+from shared import constants
 
 
 class EvaluationPipeline(BasePipeline):
