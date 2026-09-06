@@ -22,10 +22,9 @@ class EvaluationPipeline(BasePipeline):
         super().__init__(config)
         self.target_col = constants.TARGET_FEATURE
 
-        # Setup MLflow Tracking
-        mlflow_uri = self.config.get("mlflow_tracking_uri", "sqlite:///mlflow.db")
-        if mlflow_uri:
-            mlflow.set_tracking_uri(mlflow_uri)
+        # Setup MLflow Tracking: prioritize MLFLOW_TRACKING_URI env var
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI") or self.config.get("mlflow_tracking_uri") or "http://localhost:5000"
+        mlflow.set_tracking_uri(mlflow_uri)
 
     def _get_training_report(self) -> dict[str, Any]:
         report_path = os.path.join("dataset", "reports", "trainingpipeline_report.json")

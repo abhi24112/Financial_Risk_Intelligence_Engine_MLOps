@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 import mlflow
@@ -18,9 +19,8 @@ class RegistrationPipeline(BasePipeline):
         self.experiment_name = self.config.get("experiment_name", "Fraud_Detection_Training")
         self.model_name = self.config.get("registered_model_name", "fraud_risk_model")
 
-        mlflow_uri = self.config.get("mlflow_tracking_uri", "sqlite:///mlflow.db")
-        if mlflow_uri:
-            mlflow.set_tracking_uri(mlflow_uri)
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI") or self.config.get("mlflow_tracking_uri") or "http://localhost:5000"
+        mlflow.set_tracking_uri(mlflow_uri)
 
         self.client = MlflowClient()
 

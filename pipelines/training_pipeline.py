@@ -27,10 +27,9 @@ class TrainingPipeline(BasePipeline):
         self.target_col = constants.TARGET_FEATURE
         self.experiment_name = self.config.get("experiment_name", "Fraud_Detection_Training")
 
-        # mlflow cofiguration
-        mlflow_uri = self.config.get("mlflow_tracking_uri", "")
-        if mlflow_uri:
-            mlflow.set_tracking_uri(mlflow_uri)
+        # mlflow configuration: prioritize MLFLOW_TRACKING_URI env var, then config, then local server
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI") or self.config.get("mlflow_tracking_uri") or "http://localhost:5000"
+        mlflow.set_tracking_uri(mlflow_uri)
         mlflow.set_experiment(self.experiment_name)
 
     # Load the training data and validation data
