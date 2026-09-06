@@ -1,4 +1,4 @@
-﻿# docker-compose.yml - Adaptive Financial Risk Intelligence Engine Multi-Service Stack
+# docker-compose.yml - Adaptive Financial Risk Intelligence Engine Multi-Service Stack
 
 services:
   postgres:
@@ -50,6 +50,7 @@ services:
       - ./mlruns:/mlflow/artifacts
     environment:
       - MLFLOW_TRACKING_URI=http://0.0.0.0:5000
+    command: mlflow server --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5000 --cors-allowed-origins "*" --allowed-hosts "*"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
       interval: 10s
@@ -86,6 +87,60 @@ services:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
+      retries: 5
+    networks:
+      - risk_network
+
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.airflow
+    container_name: risk_engine_airflow
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-fraud_user}:${POSTGRES_PASSWORD:-admin}@postgres:5432/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - POSTGRES_USER=${POSTGRES_USER:-fraud_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-admin}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-fraud_user}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-fraud_risk}
+      - REDIS_URL=redis://redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - PYTHONPATH=/opt/airflow
+      - GIT_PYTHON_REFRESH=quiet
+      - AIRFLOW__CORE__EXECUTE_TASKS_NEW_PYTHON_INTERPRETER=True
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./pipelines:/opt/airflow/pipelines
+      - ./configs:/opt/airflow/configs
+      - ./ml:/opt/airflow/ml
+      - ./database:/opt/airflow/database
+      - ./dataset:/opt/airflow/dataset
+      - ./models:/opt/airflow/models
+      - ./shared:/opt/airflow/shared
+      - ./logs:/opt/airflow/logs
+    command: >
+      bash -c "rm -f /opt/airflow/*.pid &&
+      airflow db migrate &&
+      (airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin 2>/dev/null || airflow users reset-password --username admin --password admin) &&
+      echo admin > /opt/airflow/standalone_admin_password.txt &&
+      airflow standalone"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 10s
       retries: 5
     networks:
       - risk_network

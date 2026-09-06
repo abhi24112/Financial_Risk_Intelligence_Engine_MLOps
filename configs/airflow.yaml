@@ -1,0 +1,27 @@
+﻿# configs/airflow.yaml - Centralized Airflow DAG Configuration
+
+training_dag:
+  dag_id: "financial_risk_training_pipeline"
+  description: "End-to-end ML lifecycle orchestration: Ingest -> Validate -> Clean -> Engineer -> Split -> Train -> Evaluate -> Register"
+  schedule_interval: "0 0 * * 0"  # Every Sunday at midnight (UTC)
+  catchup: false
+  max_active_runs: 1
+  default_args:
+    owner: "mlops_team"
+    depends_on_past: false
+    retries: 2
+    retry_delay_seconds: 180
+    email_on_failure: false
+
+monitoring_dag:
+  dag_id: "financial_risk_drift_monitoring"
+  description: "Automated continuous drift monitoring with Evidently AI and conditional retraining trigger"
+  schedule_interval: "0 2 * * *"  # Daily at 2:00 AM (UTC)
+  catchup: false
+  max_active_runs: 1
+  default_args:
+    owner: "mlops_team"
+    depends_on_past: false
+    retries: 1
+    retry_delay_seconds: 120
+    email_on_failure: false

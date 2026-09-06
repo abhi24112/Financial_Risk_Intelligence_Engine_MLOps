@@ -1,6 +1,6 @@
 ## The big picture first
 
-This is a **`docker-compose.yml`** — while a Dockerfile builds *one* image, docker-compose orchestrates *multiple* containers together as one connected system: how they start, talk to each other, share data, and depend on one another. This one defines a 4-service stack: a database, a cache, an ML experiment tracker, and your API.
+This is a **`docker-compose.yml`** — while a Dockerfile builds *one* image, docker-compose orchestrates *multiple* containers together as one connected system: how they start, talk to each other, share data, and depend on one another. This one defines a **5-service production-grade stack**: a relational database (`postgres`), an in-memory feature store cache (`redis`), an ML experiment tracker & model registry (`mlflow`), a real-time risk scoring API (`api`), and a scheduled workflow orchestrator (`airflow`).
 
 ---
 
@@ -168,6 +168,80 @@ Same healthcheck logic as the `HEALTHCHECK` instruction inside `Dockerfile.api` 
 
 ---
 
+## Service 5: `airflow` — Scheduled ML Orchestration
+
+```yaml
+airflow:
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.airflow
+  container_name: risk_engine_airflow
+  restart: unless-stopped
+```
+Like `api` and `mlflow`, this service is built from a custom image (`docker/Dockerfile.airflow`), based on `apache/airflow:2.9.2-python3.11`. It installs all necessary ML libraries (XGBoost, LightGBM, Optuna, Scikit-Learn, MLflow, Evidently AI, SHAP) and pipeline dependencies.
+
+```yaml
+  environment:
+    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-fraud_user}:${POSTGRES_PASSWORD:-admin}@postgres:5432/airflow
+    - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - AIRFLOW__CORE__EXECUTE_TASKS_NEW_PYTHON_INTERPRETER=True
+    - MLFLOW_TRACKING_URI=http://mlflow:5000
+    - DATABASE_URL=postgresql://${POSTGRES_USER:-fraud_user}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-fraud_risk}
+    - REDIS_URL=redis://redis:6379/0
+```
+Key production configurations configured here:
+1. **Persistent PostgreSQL Metadata Backend (`AIRFLOW__DATABASE__SQL_ALCHEMY_CONN`)**:
+   Instead of using ephemeral SQLite (which resets whenever a container restarts), Airflow connects to a dedicated `airflow` database hosted inside the `postgres` container. Because the `postgres` container uses the persistent volume `postgres_data`, all Airflow task histories, run states, and credentials permanently survive container rebuilds.
+2. **Process Isolation (`AIRFLOW__CORE__EXECUTE_TASKS_NEW_PYTHON_INTERPRETER=True`)**:
+   Standard Airflow task execution uses `os.fork()`. In Python, forking processes running multi-threaded C++/OpenMP libraries (such as XGBoost and LightGBM) triggers deadlocks, crashing the task worker with `return code 1` and causing "Detected zombie job" errors. Setting this flag instructs Airflow to execute each task inside a clean, newly-spawned Python interpreter.
+3. **Internal Service Discovery**:
+   Points to `http://mlflow:5000` for experiment logging and model registration, and `postgres:5432` for transactional raw tables.
+
+```yaml
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./logs/airflow:/opt/airflow/logs
+    - ./pipelines:/opt/airflow/pipelines
+    - ./dataset:/opt/airflow/dataset
+    - ./models:/opt/airflow/models
+    - ./configs:/opt/airflow/configs
+    - ./shared:/opt/airflow/shared
+    - ./database:/opt/airflow/database
+```
+Bind-mounts provide live code synchronization. Any edit to DAGs, pipeline logic, or configurations on the host is immediately reflected inside the container without requiring an image rebuild.
+
+```yaml
+  ports:
+    - "8080:8080"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    mlflow:
+      condition: service_healthy
+```
+Airflow exposes its Web UI on host port `8080` and strictly waits until `postgres`, `redis`, and `mlflow` are all reporting `healthy`.
+
+```yaml
+  command: >
+    bash -c "
+      rm -f /opt/airflow/airflow-webserver.pid /opt/airflow/airflow-scheduler.pid /opt/airflow/airflow-worker.pid 2>/dev/null || true &&
+      airflow db migrate &&
+      (airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin 2>/dev/null || airflow users reset-password --username admin --password admin) &&
+      echo admin > /opt/airflow/standalone_admin_password.txt &&
+      airflow standalone
+    "
+```
+**Self-Healing Startup Sequence**:
+- Cleans up stale PID lock files left behind if the container was abruptly killed or restarted.
+- Migrates the PostgreSQL database schema (`airflow db migrate`).
+- Automatically creates or resets the default administrator account (`admin` / `admin`).
+- Synchronizes `standalone_admin_password.txt` for standalone mode.
+- Boots both the Webserver and Scheduler via `airflow standalone`.
+
+---
+
 ## Bottom sections
 
 ```yaml
@@ -188,13 +262,15 @@ Defines the custom network. `bridge` is the standard driver for a single-host, i
 
 ## How this connects to the Dockerfile from before
 
-| From Dockerfile.api | How it's used in compose |
+| From Dockerfile | How it's used in compose |
 |---|---|
-| `EXPOSE 8000` | Compose actually publishes it via `ports: "8000:8000"` |
-| `HEALTHCHECK ... curl .../health` | Compose's `depends_on: condition: service_healthy` on *other* services relies on this same pattern being present on `mlflow` and implicitly checks `api`'s own health too |
-| `ENV PYTHONPATH=/app` | Redundantly also set in compose's `environment:` — harmless, but technically duplicate |
-| `COPY models/ /app/models/` (baked into image) | Compose also bind-mounts `./models:/app/models` at runtime — the bind mount will override/shadow the baked-in copy while running |
+| `EXPOSE 8000` (API) | Published via `ports: "8000:8000"` |
+| `EXPOSE 8080` (Airflow) | Published via `ports: "8080:8080"` |
+| `EXPOSE 5000` (MLflow) | Published via `ports: "5000:5000"` |
+| `HEALTHCHECK ... curl .../health` | Compose's `depends_on: condition: service_healthy` checks container health before starting dependent services |
+| `ENV PYTHONPATH=/app` | Configured across services for clean module imports |
+| `COPY models/ /app/models/` | Bind-mounts `./models:/app/models` at runtime for real-time model syncing |
 
 ## Quick mental model to explain this to someone else
 
-> "This compose file starts 4 containers: a Postgres database, a Redis cache, an MLflow tracking server, and my FastAPI app. They all sit on the same virtual network and reach each other by service name instead of IP. The API won't even attempt to start until Postgres, Redis, and MLflow all report themselves as *actually healthy* — not just running — which avoids race conditions on startup."
+> "This compose file starts 5 containers: a Postgres database, a Redis cache, an MLflow tracking server, a FastAPI inference engine, and an Apache Airflow orchestrator. They all sit on the same virtual network and reach each other by service name instead of IP. The API and Airflow won't even attempt to start until Postgres, Redis, and MLflow all report themselves as *actually healthy* — not just running — which avoids race conditions on startup."

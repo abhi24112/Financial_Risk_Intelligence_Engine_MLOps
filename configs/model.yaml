@@ -1,7 +1,8 @@
 # configs/model.yaml
 
-experiment_name: "Fraud_Detection_Training"
-mlflow_tracking_uri: "sqlite:///mlflow.db"  # Use SQLite as local file store is deprecated by MLflow
+# When null, defaults to MLFLOW_TRACKING_URI env var (http://mlflow:5000 in Docker, http://localhost:5000 locally)
+mlflow_tracking_uri: null
+
 
 model:
   # Supported types: "xgboost", "lightgbm", "random_forest"
@@ -16,6 +17,6 @@ model:
     colsample_bytree: 0.8
     random_state: 42
 
-target_run_id: "2a675620138b4219b4cd38258ccd83ca" # lightgbm_lightgbm_tuned_trial_6
+target_run_id: null # Set to null for automatic Champion/Challenger selection based on PR-AUC
 
 registered_model_name: "fraud_risk_model"

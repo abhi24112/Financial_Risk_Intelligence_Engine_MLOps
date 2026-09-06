@@ -657,12 +657,13 @@ This section lists the implemented tasks and what needs to be worked on next, so
     - Configured local remote storage (`../dvc_remote_storage`) and pushed all 7 data and model artifacts (`dvc push`).
     - Verified `dvc status` reports `Data and pipelines are up to date.`
 
-13. **Containerization & Multi-Service Parity (`docker-compose.yml`, `docker/`)**: ✅ Complete.
-    - Created `docker/Dockerfile.api` with Python 3.11, OpenMP/libgomp runtimes, and healthcheck probes.
-    - Created `docker/Dockerfile.mlflow` with SQLite backend and volume mounting for artifact tracking.
-    - Configured `docker-compose.yml` linking 4 core services (`postgres`, `redis`, `mlflow`, `api`) over an isolated bridge network (`risk_network`).
-    - Standardized `.dockerignore`, `.env.example`, and `.env`.
-    - Documented architecture and commands in `Doc/pipeline_docs/docker_implementation.md`.
+14. **Airflow Pipeline Orchestration (`airflow/dags/`, `configs/airflow.yaml`)**: ✅ Complete.
+    - Configured centralized DAG policies in `configs/airflow.yaml`.
+    - Created `financial_risk_training_pipeline` DAG (`airflow/dags/financial_risk_training_dag.py`) connecting all 8 lifecycle stages (`Ingest` ➔ `Validate` ➔ `Clean` ➔ `Feature Engineer` ➔ `Dataset Builder` ➔ `Train` ➔ `Evaluate` ➔ `Register`).
+    - Created `financial_risk_drift_monitoring` DAG (`airflow/dags/financial_risk_monitoring_dag.py`) for automated drift monitoring with Evidently AI and conditional retraining branching.
+    - Integrated Airflow standalone service and `docker/Dockerfile.airflow` into `docker-compose.yml`.
+    - Verified syntax compilation on both DAGs with zero errors.
+    - Documented DAG topologies and runbooks in `Doc/pipeline_docs/airflow_orchestration.md`.
 
 ### Running Pipeline Scripts / Tests
 
@@ -678,17 +679,17 @@ dvc dag
 # Check DVC Stage Statuses
 dvc status
 
-# Start Full Docker Compose Stack
+# Start Full Docker Compose Stack (Postgres, Redis, MLflow, API, Airflow)
 docker compose up -d
 
 # Check Container Statuses
 docker compose ps
 
-# Run Monitoring Pipeline
-python pipelines/monitoring_pipeline.py
+# Trigger Training DAG via Airflow CLI
+docker compose exec airflow airflow dags trigger financial_risk_training_pipeline
 
-# Run Retraining Pipeline (forced or drift-triggered)
-python pipelines/retraining_pipeline.py
+# Trigger Drift Monitoring DAG via Airflow CLI
+docker compose exec airflow airflow dags trigger financial_risk_drift_monitoring
 
 # Run API Tests
 pytest tests/integration/test_api.py
@@ -708,6 +709,6 @@ python main.py
 
 ### Next Steps & Tasks
 
-- [ ] **Airflow Orchestration DAG (`airflow/dags/financial_risk_dag.py`)**: Create the production DAG connecting all pipeline classes in sequence (Ingest ➔ Validate ➔ Clean ➔ Engineer ➔ Train ➔ Evaluate ➔ Register).
-- [ ] **Airflow Containerization**: Attach the Airflow service to `docker-compose.yml` once DAGs are ready.
+- [ ] **Continuous Integration / CI-CD (`.github/workflows/`)**: Setup GitHub Actions for automated linting (`ruff`), unit/integration testing (`pytest`), Docker image building, and test deployment.
+- [ ] **Infrastructure as Code (IaC / Terraform)**: Setup Terraform scripts for AWS deployment (ECS/EKS, RDS PostgreSQL, ElastiCache Redis).
 
