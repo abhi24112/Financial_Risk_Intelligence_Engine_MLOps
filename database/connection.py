@@ -3,16 +3,10 @@ import os
 
 from sqlalchemy import create_engine, text
 
-from shared import configure_logging
-
-configure_logging(log_file="database.log")
-
 
 class Database:
     def __init__(self, database_url=None):
-        self.database_url = database_url or os.getenv(
-            "DATABASE_URL", "postgresql://fraud_user:admin@localhost:5432/fraud_risk"
-        )
+        self.database_url = database_url or os.getenv("DATABASE_URL", "postgresql://fraud_user:admin@localhost:5432/fraud_risk")
         self._engine = None
         logging.info("Database initialized Successfully")
 
@@ -45,3 +39,17 @@ class Database:
         except Exception as e:
             logging.error(f"Connection Failed: {e}")
             return False
+
+    def read_sql(self, query: str, **kwargs):
+        """Execute a SQL query and return results as a Pandas DataFrame.
+
+        Uses the raw DBAPI (psycopg2) connection to ensure full compatibility
+        across Pandas 2.x and SQLAlchemy 1.4/2.x.
+        """
+        import pandas as pd
+
+        raw_conn = self.get_engine().raw_connection()
+        try:
+            return pd.read_sql(query, raw_conn, **kwargs)  # type: ignore
+        finally:
+            raw_conn.close()
