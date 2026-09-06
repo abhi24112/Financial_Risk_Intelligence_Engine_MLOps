@@ -76,14 +76,19 @@ cd Financial_Risk_Intelligence_Engine_MLOps
 conda activate financial_risk_intelligence
 ```
 
-**2. Spin up the Infrastructure**
-This will start PostgreSQL (Database), Redis (Feature Store), and MLflow.
+**2. Spin up the Containerized Infrastructure**
+This starts all 5 coordinated microservices: PostgreSQL, Redis, MLflow, FastAPI Serving, and Apache Airflow:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-**3. Run the Core Pipelines**
-Our core ML logic is executed via dedicated CLI scripts built on top of our pipeline classes:
+Access the core service dashboards:
+* **FastAPI Docs & Interactive UI**: [http://localhost:8000/docs](http://localhost:8000/docs) & [http://localhost:8000/ui](http://localhost:8000/ui)
+* **MLflow Tracking & Model Registry**: [http://localhost:5000](http://localhost:5000)
+* **Apache Airflow Orchestrator**: [http://localhost:8080](http://localhost:8080) (Username: `admin` | Password: `admin`)
+
+**3. Run Pipelines (CLI or Airflow)**
+Our ML lifecycle can be triggered via Apache Airflow DAGs or via dedicated CLI scripts built on top of our pipeline classes:
 
 ```bash
 # Set PYTHONPATH for local execution
@@ -100,8 +105,12 @@ python scripts/train.py --config model.yaml
 python scripts/register.py --config model.yaml
 ```
 
-**4. View MLflow Dashboard**
-View your tuning trials and Model Registry UI:
+**4. Trigger Pipelines via Apache Airflow CLI**
+You can also trigger end-to-end DAGs directly inside the running container:
 ```bash
-mlflow ui --backend-store-uri sqlite:///mlflow.db
+# Trigger full retraining & champion registration DAG
+docker compose exec airflow airflow dags trigger financial_risk_training_pipeline
+
+# Trigger Evidently AI drift monitoring DAG
+docker compose exec airflow airflow dags trigger financial_risk_drift_monitoring
 ```
