@@ -87,3 +87,4 @@ ruff-report.json
 
 # test files
 test.ipynb
+database/__pycache__/
