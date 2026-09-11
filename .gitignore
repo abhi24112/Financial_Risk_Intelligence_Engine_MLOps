@@ -26,6 +26,7 @@ ENV/
 .DS_Store
 Thumbs.db
 Desktop.ini
+GEMINI.md
 
 # Logs and local runtime output
 logs/
@@ -85,6 +86,9 @@ poetry.lock
 .nox/
 *.pytype/
 ruff-report.json
+
+# Documents
+Doc/interview_Questions
 
 # test files
 test.ipynb
