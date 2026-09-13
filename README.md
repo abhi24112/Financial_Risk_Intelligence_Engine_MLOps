@@ -9,6 +9,7 @@
 [![MLflow](https://img.shields.io/badge/MLflow-Tracking_%26_Registry-0194E2.svg)](https://mlflow.org/)
 [![Airflow](https://img.shields.io/badge/Airflow-Workflow_Orchestration-017CEE.svg)](https://airflow.apache.org/)
 [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED.svg)](https://www.docker.com/)
+[![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub_Actions_%26_ECR-2088FF.svg)](https://github.com/abhi24112/Financial_Risk_Intelligence_Engine_MLOps/actions)
 
 ---
 
@@ -192,7 +193,7 @@ The local stack is coordinated across five Docker containers:
 
 ## Class-Based Pipeline Architecture
 
-Following the architectural requirements defined in `GEMINI.md`, every pipeline stage inherits from an abstract `BasePipeline` class (`pipelines/base_pipeline.py`). This guarantees uniform structured logging, timing telemetry, error propagation, artifact tracking, and configuration loading across all tasks.
+Following the system's modular design principles, every pipeline stage inherits from an abstract `BasePipeline` class (`pipelines/base_pipeline.py`). This guarantees uniform structured logging, timing telemetry, error propagation, artifact tracking, and configuration loading across all tasks.
 
 ```mermaid
 flowchart TD
@@ -275,6 +276,7 @@ flowchart TD
 | **Relational Storage** | PostgreSQL 16 / AWS RDS | Transaction history and Airflow operational state store |
 | **Data Drift Monitoring** | Evidently AI | Distribution drift detection, KS-tests, and data quality reporting |
 | **Containerization** | Docker, Docker Compose | Multi-container local/production parity with health check orchestration |
+| **CI/CD Automation** | GitHub Actions | Path-filtered smoke testing, ECR container packaging, and zero-downtime ECS rollout |
 | **Cloud Infrastructure** | AWS (ECS Fargate, ALB, ECR) | Serverless container execution, load balancing, and private image registry |
 | **Edge CDN & SSL** | AWS CloudFront | Edge caching, SSL termination, and global HTTPS routing |
 | **Infrastructure as Code** | Terraform | Modular provisioning for all AWS resources with remote S3 state locking |
@@ -380,10 +382,47 @@ terraform -chdir=infrastructure/terraform/environments/dev destroy
 
 ---
 
+## Continuous Integration & Continuous Deployment (CI/CD)
+
+The serving container lifecycle is automated using **GitHub Actions**, providing continuous validation, Docker container packaging, Amazon ECR versioning, and zero-downtime rolling updates on AWS ECS (Fargate).
+
+```mermaid
+flowchart LR
+    subgraph GitHub ["GitHub Repository"]
+        A[Git Push / PR to main] --> B{Path Filter Check}
+        B -- "Non-Serving Files<br/>(Docs/Notebooks/DAGs)" --> C[Workflow Skipped ⏭️]
+        B -- "Serving Context<br/>(api/, ml/, models/, Dockerfile.api)" --> D[Stage 1: Smoke Tests 🧪]
+        D --> E{5/5 Tests Pass?}
+        E -- No --> F[Fail Fast & Abort ❌]
+        E -- Yes --> G[Stage 2: Build & Push ECR 🐳]
+    end
+
+    subgraph AWS ["Amazon Web Services (ap-south-1)"]
+        G --> H[Amazon ECR<br/>Tagged with Git SHA + latest]
+        H --> I[Stage 3: ECS Rolling Update 🚀]
+        I --> J[AWS ECS Fargate<br/>Zero-Downtime Rollout behind ALB]
+    end
+```
+
+### Key Highlights of the CI/CD Pipeline
+1. **Intelligent Path Filtering (`paths:`)**: The pipeline rebuilds the container **only** when files packaged into the serving container change (`api/**`, `ml/**`, `models/**`, `shared/**`, `configs/**`, `requirements.txt`, `docker/Dockerfile.api`, `main.py`). Commits touching documentation, exploratory notebooks, or Airflow DAGs skip container builds to conserve runner and cloud minutes.
+2. **Fail-Fast Smoke Testing**: Executes an automated 5-second test suite (`tests/unit/test_ci_smoke.py`) on Ubuntu with Python 3.12, verifying configuration integrity (`api.yaml`, `model.yaml`), Pydantic schema validation (`TransactionRequest`, `BatchTransactionRequest`), and FastAPI application boot with `/health` liveness checks before running multi-layer Docker builds.
+3. **Automated Docker Packaging & Multi-Tagging**: Builds `docker/Dockerfile.api` with the pre-baked champion model (`models/production_model.skops`, 3.2 MB) and pushes two distinct tags to Amazon ECR:
+   - **Immutable Git Commit SHA** (`${{ github.sha }}`) for deterministic tracking and instant rollbacks.
+   - **`latest`** tag for standard continuous deployment.
+4. **Resilient Zero-Downtime ECS Rolling Update**: Verifies cluster and service status before triggering `aws ecs update-service --force-new-deployment`. New Fargate tasks are launched, pass ALB health checks, and traffic shifts smoothly without service interruption. If the ECS service is temporarily stopped to save costs, the workflow notes the ECR push and completes cleanly without failing.
+
+> For complete documentation, secret configuration tables, and interview questions, see [`Doc/cicd_docs/ci_cd_pipeline.md`](Doc/cicd_docs/ci_cd_pipeline.md).
+
+---
+
 ## Repository Structure
 
 ```text
 Adaptive-Financial-Risk-Intelligence-Engine/
+├── .github/                    # GitHub Actions CI/CD workflows
+│   └── workflows/
+│       └── ci_cd.yml           # Automated smoke test, ECR build/push & ECS rolling deploy
 ├── airflow/                    # Apache Airflow DAGs and orchestration configuration
 │   └── dags/
 │       ├── financial_risk_training_dag.py     # End-to-end training & registration DAG
@@ -409,6 +448,7 @@ Adaptive-Financial-Risk-Intelligence-Engine/
 │       ├── environments/dev/   # Dev environment root module
 │       └── modules/            # Networking, security, iam, database, cache, compute, cdn
 ├── ml/                         # Core machine learning logic (training, evaluation, tuning)
+├── models/                     # Production champion and challenger models (.skops, .dvc)
 ├── pipelines/                  # Class-based pipeline stages (BasePipeline implementations)
 ├── scripts/                    # Command-line entry points for training, tuning, and testing
 ├── shared/                     # Cross-cutting utilities: structured logging, exceptions, config loaders
