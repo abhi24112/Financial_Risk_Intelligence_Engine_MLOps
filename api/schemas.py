@@ -93,6 +93,25 @@ class ExplainResponse(BaseModel):
     latency_ms: float = Field(..., description="Explanation computation time in ms")
 
 
+class BatchExplainRequest(BaseModel):
+    """
+    Schema for batch SHAP explanation requests.
+    """
+
+    transactions: list[TransactionRequest] = Field(..., min_length=1, max_length=50, description="Transactions to explain (max 50 per batch)")
+    top_k: int = Field(default=3, ge=1, le=10, description="Top influential features per transaction")
+
+
+class BatchExplainResponse(BaseModel):
+    """
+    Schema for batch SHAP explanation response.
+    """
+
+    explanations: list[ExplainResponse] = Field(..., description="List of transaction explanations")
+    total_transactions: int = Field(..., description="Total transactions explained")
+    batch_latency_ms: float = Field(..., description="Total latency for batch explanation in ms")
+
+
 class HealthResponse(BaseModel):
     """
     Schema for liveness and readiness probe.

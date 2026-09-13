@@ -281,6 +281,36 @@
             color: #a5f3fc;
             margin-top: 10px;
         }
+        .btn-explain-sm {
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .btn-explain-sm:hover {
+            background: #6d28d9;
+        }
+
+        .batch-explain-card {
+            background: #090d16;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+        .batch-explain-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+            font-size: 13px;
+            color: #38bdf8;
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
@@ -313,7 +343,7 @@
 
                 <div class="action-row">
                     <button class="btn-primary" onclick="scoreTransaction()">⚡ Evaluate Risk (/predict)</button>
-                    <button class="btn-explain" onclick="explainTransaction()">🔍 Explain Risk (/explain)</button>
+                    <button class="btn-explain" onclick="explainTransaction()">🔍 Explain Risk Factors</button>
                     <button class="btn-secondary" onclick="scoreBatch()">📦 Score Batch (/predict/batch)</button>
                 </div>
             </div>
@@ -347,7 +377,7 @@
                     <div style="margin-top: 18px;">
                         <div class="metric-label" style="margin-bottom: 6px;">Analyst Reasons (SHAP Engine)</div>
                         <ul id="reasons-container" class="reasons-list">
-                            <li style="border-left-color: #475569; color: #94a3b8;">Click 'Explain Risk' to inspect SHAP feature attribution.</li>
+                            <li style="border-left-color: #475569; color: #94a3b8;">Click 'Explain Risk Factors' to inspect SHAP feature attribution.</li>
                         </ul>
                     </div>
                 </div>
@@ -374,11 +404,18 @@
                                     <th>Risk Score</th>
                                     <th>Risk Level</th>
                                     <th>Fraud Prob</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="batch-table-body">
                             </tbody>
                         </table>
+                    </div>
+
+                    <!-- Batch Explanations Container -->
+                    <div id="batch-explanations-container" style="margin-top: 14px; display: none;">
+                        <div class="metric-label" style="margin-bottom: 6px;">Batch SHAP Explanations</div>
+                        <div id="batch-explain-cards"></div>
                     </div>
                 </div>
 
@@ -391,6 +428,8 @@
     </div>
 
     <script>
+        let currentBatchTxs = [];
+
         const normalPayload = {
             "TransactionAmt": 30.00,
             "TransactionDT": 86620,
@@ -449,6 +488,7 @@
                     "P_emaildomain": "aol.com",
                     "C1": 1.0, "C2": 1.0, "C6": 1.0, "C8": 1.0, "C10": 1.0, "C11": 1.0, "C13": 1.0, "C14": 1.0, "D1": 0.0,
                     "id_15": "Found", "id_16": "Found",
+                    "id_30": "Mac OS X 10_11_6", "id_31": "chrome 62.0",
                     "DeviceType": "desktop"
                 },
                 {
@@ -462,8 +502,10 @@
                     "P_emaildomain": "gmail.com",
                     "C1": 7.0, "C2": 6.0,
                     "id_15": "New", "id_16": "NotFound",
+                    "id_30": "Windows 10", "id_31": "firefox",
                     "DeviceType": "desktop",
-                    "is_new_device": 1
+                    "is_new_device": 1,
+                    "is_new_email": 1
                 },
                 {
                     "TransactionAmt": 107.95,
@@ -484,18 +526,24 @@
             document.getElementById("payload-input").value = JSON.stringify(normalPayload, null, 2);
             document.getElementById("single-view").style.display = "block";
             document.getElementById("batch-view").style.display = "none";
+            document.getElementById("raw-output").textContent = "{}";
+            document.getElementById("reasons-container").innerHTML = `<li style="border-left-color: #475569; color: #94a3b8;">Click 'Explain Risk Factors' to inspect SHAP feature attribution.</li>`;
         }
 
         function loadFraud() {
             document.getElementById("payload-input").value = JSON.stringify(fraudPayload, null, 2);
             document.getElementById("single-view").style.display = "block";
             document.getElementById("batch-view").style.display = "none";
+            document.getElementById("raw-output").textContent = "{}";
+            document.getElementById("reasons-container").innerHTML = `<li style="border-left-color: #475569; color: #94a3b8;">Click 'Explain Risk Factors' to inspect SHAP feature attribution.</li>`;
         }
 
         function loadBatchSample() {
             document.getElementById("payload-input").value = JSON.stringify(batchPayload, null, 2);
             document.getElementById("single-view").style.display = "none";
             document.getElementById("batch-view").style.display = "block";
+            document.getElementById("batch-explanations-container").style.display = "none";
+            document.getElementById("raw-output").textContent = "{}";
         }
 
         // Initialize with Normal preset
@@ -504,7 +552,6 @@
         async function scoreTransaction() {
             try {
                 const parsed = JSON.parse(document.getElementById("payload-input").value);
-                // Smart router: if input contains transactions array, redirect to batch
                 if (parsed.transactions && Array.isArray(parsed.transactions)) {
                     await scoreBatch();
                     return;
@@ -525,11 +572,15 @@
         async function explainTransaction() {
             try {
                 const parsed = JSON.parse(document.getElementById("payload-input").value);
-                const tx = parsed.transactions ? parsed.transactions[0] : parsed;
+                if (parsed.transactions && Array.isArray(parsed.transactions)) {
+                    await explainBatch();
+                    return;
+                }
+
                 const res = await fetch("/explain", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ transaction: tx, top_k: 4 })
+                    body: JSON.stringify({ transaction: parsed, top_k: 4 })
                 });
                 const data = await res.json();
                 renderSingleResult(data);
@@ -543,15 +594,56 @@
             try {
                 const parsed = JSON.parse(document.getElementById("payload-input").value);
                 const body = parsed.transactions ? parsed : { transactions: [parsed] };
+                currentBatchTxs = body.transactions;
+
                 const res = await fetch("/predict/batch", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body)
                 });
                 const data = await res.json();
-                renderBatchResult(data, body.transactions);
+                renderBatchResult(data, currentBatchTxs);
             } catch (err) {
                 alert("Error in batch request: " + err);
+            }
+        }
+
+        async function explainBatch() {
+            try {
+                const parsed = JSON.parse(document.getElementById("payload-input").value);
+                const txList = parsed.transactions ? parsed.transactions : [parsed];
+                currentBatchTxs = txList;
+
+                const res = await fetch("/explain/batch", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ transactions: txList, top_k: 3 })
+                });
+                const data = await res.json();
+                renderBatchExplanationResult(data, currentBatchTxs);
+            } catch (err) {
+                alert("Error in batch explainability request: " + err);
+            }
+        }
+
+        async function explainBatchRow(idx) {
+            try {
+                const tx = currentBatchTxs && currentBatchTxs[idx] ? currentBatchTxs[idx] : null;
+                if (!tx) {
+                    alert("Transaction payload for row not found.");
+                    return;
+                }
+
+                const res = await fetch("/explain", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ transaction: tx, top_k: 4 })
+                });
+                const data = await res.json();
+                renderSingleResult(data);
+                renderReasons(data.reasons || []);
+            } catch (err) {
+                alert("Error explaining row: " + err);
             }
         }
 
@@ -586,6 +678,7 @@
         function renderBatchResult(data, originalTxs) {
             document.getElementById("single-view").style.display = "none";
             document.getElementById("batch-view").style.display = "block";
+            document.getElementById("batch-explanations-container").style.display = "none";
 
             document.getElementById("raw-output").textContent = JSON.stringify(data, null, 2);
             document.getElementById("latency-tag").textContent = `Batch Latency: ${data.batch_latency_ms} ms`;
@@ -609,8 +702,64 @@
                     <td><strong>${pred.risk_score} / 100</strong></td>
                     <td><span class="badge ${badgeClass}">${pred.risk_level}</span></td>
                     <td>${(pred.fraud_probability * 100).toFixed(1)}%</td>
+                    <td><button class="btn-explain-sm" onclick="explainBatchRow(${idx})">🔍 Explain</button></td>
                 `;
                 tbody.appendChild(tr);
+            });
+        }
+
+        function renderBatchExplanationResult(data, originalTxs) {
+            document.getElementById("single-view").style.display = "none";
+            document.getElementById("batch-view").style.display = "block";
+
+            document.getElementById("raw-output").textContent = JSON.stringify(data, null, 2);
+            document.getElementById("latency-tag").textContent = `Batch Latency: ${data.batch_latency_ms} ms`;
+            document.getElementById("batch-total-count").textContent = data.total_transactions;
+            document.getElementById("batch-throughput-val").textContent = `${(data.total_transactions / (data.batch_latency_ms / 1000)).toFixed(0)} tx/s`;
+
+            const tbody = document.getElementById("batch-table-body");
+            tbody.innerHTML = "";
+
+            const cardsContainer = document.getElementById("batch-explain-cards");
+            cardsContainer.innerHTML = "";
+            document.getElementById("batch-explanations-container").style.display = "block";
+
+            (data.explanations || []).forEach((exp, idx) => {
+                const amt = originalTxs && originalTxs[idx] ? `$${originalTxs[idx].TransactionAmt}` : "--";
+                
+                let badgeClass = "badge-low";
+                if (exp.risk_level === "High" || exp.risk_score >= 70) badgeClass = "badge-high";
+                else if (exp.risk_level === "Medium" || exp.risk_score >= 40) badgeClass = "badge-medium";
+
+                // Table Row
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><strong>#${idx + 1}</strong></td>
+                    <td>${amt}</td>
+                    <td><strong>${exp.risk_score} / 100</strong></td>
+                    <td><span class="badge ${badgeClass}">${exp.risk_level}</span></td>
+                    <td>${(exp.fraud_probability * 100).toFixed(1)}%</td>
+                    <td><button class="btn-explain-sm" onclick="explainBatchRow(${idx})">🔍 Explain</button></td>
+                `;
+                tbody.appendChild(tr);
+
+                // Explanation Card
+                const card = document.createElement("div");
+                card.className = "batch-explain-card";
+                
+                let reasonsHtml = (exp.reasons || []).map(r => `<li>${r}</li>`).join("");
+                if (!reasonsHtml) reasonsHtml = `<li>No specific drivers found.</li>`;
+
+                card.innerHTML = `
+                    <div class="batch-explain-header">
+                        <span>Tx #${idx + 1} (${amt})</span>
+                        <span class="badge ${badgeClass}">Score: ${exp.risk_score}/100 (${exp.risk_level})</span>
+                    </div>
+                    <ul class="reasons-list" style="margin-top: 6px;">
+                        ${reasonsHtml}
+                    </ul>
+                `;
+                cardsContainer.appendChild(card);
             });
         }
 

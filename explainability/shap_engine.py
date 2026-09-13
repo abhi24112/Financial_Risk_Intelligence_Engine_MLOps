@@ -22,14 +22,44 @@ class SHAPEngine:
         if isinstance(feature_value, float):
             feature_value = round(feature_value, 2)
 
+        is_missing = feature_value == -1.0 or feature_value == -1 or pd.isna(feature_value)
+
         if feature_name == "TransactionAmt":
             return f"Transaction amount (${feature_value}) {direction} the risk score."
         elif feature_name.startswith("card"):
-            return f"Customer card property '{feature_name}' (Value: {feature_value}) {direction} the risk score."
+            return f"Customer card attribute '{feature_name}' (Value: {feature_value}) {direction} the risk score."
+        elif feature_name.startswith("C") and feature_name[1:].isdigit():
+            if is_missing:
+                return f"Unobserved transaction velocity counter '{feature_name}' (missing history) {direction} the risk score."
+            return f"Transaction frequency counter '{feature_name}' (Count: {feature_value}) {direction} the risk score."
+        elif feature_name.startswith("D") and feature_name[1:].isdigit():
+            if is_missing:
+                return f"Unobserved transaction interval '{feature_name}' {direction} the risk score."
+            return f"Timedelta interval '{feature_name}' ({feature_value} units) {direction} the risk score."
+        elif feature_name in ["id_15", "id_16"]:
+            return f"Device identity verification flag '{feature_name}' {direction} the risk score."
+        elif feature_name.startswith("id_"):
+            return f"Identity/Device attribute '{feature_name}' {direction} the risk score."
+        elif feature_name == "ProductCD":
+            return f"Product transaction category '{feature_name}' {direction} the risk score."
+        elif feature_name in ["addr1", "addr2"]:
+            if is_missing:
+                return f"Missing regional/billing address code '{feature_name}' {direction} the risk score."
+            return f"Regional address attribute '{feature_name}' (Value: {feature_value}) {direction} the risk score."
+        elif feature_name in ["P_emaildomain", "R_emaildomain"]:
+            return f"Email domain profile '{feature_name}' {direction} the risk score."
         elif feature_name == "DeviceType":
-            return f"Device type ({feature_value}) {direction} the risk score."
+            return f"Device type '{feature_value}' {direction} the risk score."
+        elif feature_name == "is_new_device":
+            return f"First-time device usage flag {direction} the risk score."
+        elif feature_name == "is_new_email":
+            return f"First-time email usage flag {direction} the risk score."
+        elif feature_name == "time_since_last_transaction":
+            if is_missing:
+                return f"No previous transaction record found for this card {direction} the risk score."
+            return f"Time elapsed since previous transaction ({feature_value}s) {direction} the risk score."
         elif "missing" in feature_name.lower():
-            return f"Missing information in '{feature_name}' {direction} the risk score."
+            return f"Missing information indicator in '{feature_name}' {direction} the risk score."
         else:
             return f"Behavioral metric '{feature_name}' (Value: {feature_value}) {direction} the risk score."
 

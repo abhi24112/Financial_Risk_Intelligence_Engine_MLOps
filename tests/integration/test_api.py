@@ -146,3 +146,53 @@ def test_explain_endpoint(client: TestClient):
     assert len(data["reasons"]) <= 3
     assert "top_features" in data
     assert "shap_values" in data
+
+
+def test_explain_batch_endpoint(client: TestClient):
+    payload = {
+        "transactions": [
+            {
+                "TransactionAmt": 30.00,
+                "TransactionDT": 86620,
+                "ProductCD": "H",
+                "card1": "1790",
+                "card2": "555",
+                "card3": "150",
+                "card6": "debit",
+                "P_emaildomain": "aol.com",
+                "C1": 1.0,
+                "C2": 1.0,
+                "DeviceType": "desktop",
+            },
+            {
+                "TransactionAmt": 225.00,
+                "TransactionDT": 92350,
+                "ProductCD": "R",
+                "card1": "4425",
+                "card2": "562",
+                "card3": "150",
+                "card6": "credit",
+                "P_emaildomain": "gmail.com",
+                "C1": 7.0,
+                "C2": 6.0,
+                "id_15": "New",
+                "DeviceType": "desktop",
+            },
+        ],
+        "top_k": 3,
+    }
+    response = client.post("/explain/batch", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_transactions"] == 2
+    assert len(data["explanations"]) == 2
+    assert data["batch_latency_ms"] >= 0
+
+    for exp in data["explanations"]:
+        assert 0 <= exp["risk_score"] <= 100
+        assert exp["risk_level"] in ["Low", "Medium", "High"]
+        assert "reasons" in exp
+        assert len(exp["reasons"]) <= 3
+        assert "top_features" in exp
+        assert "shap_values" in exp
