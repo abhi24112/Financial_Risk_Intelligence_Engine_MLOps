@@ -93,3 +93,35 @@ Doc/interview_Questions
 # test files
 test.ipynb
 database/__pycache__/
+
+# Terraform & Cloud Infrastructure
+**/.terraform/
+.terraform/
+
+# Terraform state files (CRITICAL: contain plaintext database passwords and secrets)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Sensitive variable files containing passwords/tokens
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!*.tfvars.sample
+
+# Lock files created during runtime
+*.tflock
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Local development override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc

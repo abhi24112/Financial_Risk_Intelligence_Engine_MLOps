@@ -1,0 +1,17 @@
+# infrastructure/terraform/environments/dev/terraform.tfvars.example
+# Copy this file to terraform.tfvars and customize if needed
+
+aws_region   = "ap-south-1"
+aws_profile  = "terraform-lab"
+project_name = "financial-risk-engine"
+environment  = "dev"
+
+# Database Configuration
+db_username = "fraud_user"
+db_password = "FinancialRiskAdmin2026!" # Change to a secure password
+db_name     = "fraud_risk"
+
+# Subnet CIDR allocations (Multi-AZ)
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
