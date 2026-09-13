@@ -38,7 +38,10 @@ class InferencePipeline(BasePipeline):
         # For simplicity, we extract it from the pipeline if possible, or assume df columns match
         try:
             if self.model is not None:
-                self.expected_features = self.model.named_steps["model"].feature_names_in_
+                if hasattr(self.model, "named_steps") and "preprocessor" in self.model.named_steps:
+                    self.expected_features = self.model.named_steps["preprocessor"].feature_names_in_
+                else:
+                    self.expected_features = self.model.named_steps["model"].feature_names_in_
         except AttributeError:
             self.expected_features = None
 
@@ -49,13 +52,19 @@ class InferencePipeline(BasePipeline):
         self._categorical_columns: set[str] = set()
         try:
             assert self.model is not None
-            estimator = self.model.named_steps["model"]
-            if hasattr(estimator, "booster_"):
-                cat_indices = getattr(estimator.booster_, "pandas_categorical", None)
-                # pandas_categorical is a list-of-lists; first element is column names
-                if cat_indices and len(cat_indices) > 0 and isinstance(cat_indices[0], list):
-                    self._categorical_columns = set(cat_indices[0])
-            # If pandas_categorical didn't yield anything, inspect feature_names
+            if hasattr(self.model, "named_steps") and "preprocessor" in self.model.named_steps:
+                preprocessor = self.model.named_steps["preprocessor"]
+                for name, _, cols in preprocessor.transformers_:
+                    if name == "cat":
+                        self._categorical_columns = set(cols)
+            else:
+                estimator = self.model.named_steps["model"]
+                if hasattr(estimator, "booster_"):
+                    cat_indices = getattr(estimator.booster_, "pandas_categorical", None)
+                    if cat_indices and len(cat_indices) > 0 and isinstance(cat_indices[0], list):
+                        self._categorical_columns = set(cat_indices[0])
+        except Exception:
+            pass
             if not self._categorical_columns and self.expected_features is not None:
                 # Fallback: known categorical column prefixes from IEEE-CIS dataset
                 cat_prefixes = (
@@ -85,8 +94,6 @@ class InferencePipeline(BasePipeline):
                     "id_38",
                 )
                 self._categorical_columns = {f for f in self.expected_features if f in cat_prefixes}
-        except Exception:
-            pass
 
     def _load_champion_model(self):
         """Loads the Champion model from local storage or MLflow registry, with fallbacks."""
@@ -105,7 +112,24 @@ class InferencePipeline(BasePipeline):
             except Exception as e:
                 self.logger.warning(f"Could not load local .skops model: {e}. Trying MLflow registry.")
 
-        # 2. Secondary Strategy: Load from MLflow Model Registry
+        # 2. Secondary Strategy: Load local fallback files BEFORE hitting MLflow registry
+        # This ensures newly trained models (like lightgbm.pkl) are used in local testing
+        # even if they haven't been formally registered yet.
+        for model_file in ["lightgbm.pkl", "xgboost.pkl", "random_forest.pkl", "challenger_model.skops"]:
+            local_path = models_dir / model_file
+            if local_path.exists():
+                self.logger.info(f"Loading local model from {local_path}")
+                if local_path.suffix == ".skops":
+                    import skops.io as sio
+
+                    trusted = sio.get_untrusted_types(file=str(local_path))
+                    pipeline = sio.load(str(local_path), trusted=trusted)
+                else:
+                    pipeline = joblib.load(local_path)
+                self.logger.info("Local fallback model loaded successfully.")
+                return pipeline
+
+        # 3. Tertiary Strategy: Load from MLflow Model Registry
         model_uri = f"models:/{self.model_name}/Production"
         self.logger.info(f"Loading champion model into memory from {model_uri}")
 
@@ -135,24 +159,9 @@ class InferencePipeline(BasePipeline):
         except Exception as e2:
             self.logger.warning(f"MLflow fallback also failed: {e2}. Trying local fallback files.")
 
-        # 4. Fallback 2: Load local fallback files
-        for model_file in ["challenger_model.skops", "lightgbm.pkl", "xgboost.pkl", "random_forest.pkl"]:
-            local_path = models_dir / model_file
-            if local_path.exists():
-                self.logger.info(f"Loading local model from {local_path}")
-                if local_path.suffix == ".skops":
-                    import skops.io as sio
-
-                    trusted = sio.get_untrusted_types(file=str(local_path))
-                    pipeline = sio.load(str(local_path), trusted=trusted)
-                else:
-                    pipeline = joblib.load(local_path)
-                self.logger.info("Local fallback model loaded successfully.")
-                return pipeline
-
         raise RuntimeError(
-            "No model could be loaded. Local models/production_model.skops, MLflow registry, "
-            "experiment search, and local fallback files all failed. Re-run training first."
+            "No model could be loaded. Local models/production_model.skops, local pkl files, MLflow registry, "
+            "and experiment search all failed. Re-run training first."
         )
 
     def _build_features(self, raw_tx: dict[str, Any]) -> pd.DataFrame:
@@ -210,41 +219,18 @@ class InferencePipeline(BasePipeline):
         if self.expected_features is not None:
             complete_features: dict[str, Any] = {}
             for col in self.expected_features:
-                if col in features:
-                    complete_features[col] = features[col]
-                elif col in self._categorical_columns:
-                    # Use NaN for missing categoricals — will be coded to -1 below
-                    complete_features[col] = np.nan
+                val = features.get(col)
+                if col in self._categorical_columns:
+                    complete_features[col] = str(val) if val is not None and not pd.isna(val) else "missing"
                 else:
-                    complete_features[col] = np.nan
+                    try:
+                        complete_features[col] = float(val) if val is not None and not pd.isna(val) else -1.0
+                    except (ValueError, TypeError):
+                        complete_features[col] = -1.0
+
             df = pd.DataFrame([complete_features], columns=list(self.expected_features))
         else:
             df = pd.DataFrame([features])
-
-        # 7. Encode ALL categorical columns to integer codes.
-        #    LightGBM was trained on Pandas `category` dtype columns whose internal
-        #    representation is integer codes. When we bypass the Pandas wrapper
-        #    (passing numpy arrays), we must replicate that encoding ourselves.
-        #    Unseen categories and NaN both map to -1, which tree models handle
-        #    naturally as a "missing" bin.
-        for col in self._categorical_columns:
-            if col in df.columns:
-                val = df[col].iloc[0]
-                if pd.isna(val) or val is None:
-                    df[col] = -1.0
-                else:
-                    # Encode as a deterministic integer. The exact code value doesn't
-                    # matter for tree models — what matters is consistency. Since
-                    # LightGBM/XGBoost split on <=/>  thresholds, unseen strings
-                    # will simply land in a single leaf (the model generalises from
-                    # the feature's numeric distribution, not from specific codes).
-                    # We use a hash-based code for determinism.
-                    df[col] = float(hash(str(val)) % (2**31))
-
-        # 8. Ensure the entire DataFrame is numeric (float64)
-        #    This guarantees .values produces a clean float64 numpy array with no
-        #    string cells that would cause "could not convert string to float".
-        df = df.apply(pd.to_numeric, errors="coerce").fillna(-1.0)
 
         return df
 
@@ -265,14 +251,10 @@ class InferencePipeline(BasePipeline):
             raise RuntimeError("No model is loaded for inference.")
 
         try:
-            # Convert to numpy array to bypass LightGBM's overly strict
-            # Pandas categorical validation logic. We already ensured the
-            # features are in the exact expected order.
-            X_infer = df_features.values
-
-            # 2. Make Prediction
+            # We pass the Pandas DataFrame directly to the Scikit-Learn Pipeline
+            # so the OrdinalEncoder can process the string columns by name.
             self.logger.info("Making risk prediction...")
-            probabilities = self.model.predict_proba(X_infer)
+            probabilities = self.model.predict_proba(df_features)
 
             # XGBoost/LightGBM binary classification returns [[prob_0, prob_1]]
             fraud_probability = float(probabilities[0][1])
@@ -335,11 +317,10 @@ class InferencePipeline(BasePipeline):
         # Build feature frames for all transactions
         dfs = [self._build_features(tx) for tx in raw_tx_list]
         combined_df = pd.concat(dfs, ignore_index=True)
-        X_matrix = combined_df.values
 
         # Run single vectorized batch inference
         try:
-            probabilities = self.model.predict_proba(X_matrix)
+            probabilities = self.model.predict_proba(combined_df)
             fraud_probs = probabilities[:, 1]
         except AttributeError:
             preds = self.model.predict(combined_df)

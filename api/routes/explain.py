@@ -42,15 +42,34 @@ def _compute_single_explanation(
     # 2. Build preprocessed numeric dataframe
     df_features = inference_pipeline._build_features(raw_tx)
 
-    # 3. Extract estimator
+    # 3. Extract estimator and preprocess data for SHAP
     estimator = _extract_estimator(inference_pipeline.model)
+
+    if hasattr(inference_pipeline.model, "named_steps") and "preprocessor" in inference_pipeline.model.named_steps:
+        # The preprocessor (OrdinalEncoder) changes the data, we must pass the transformed data to SHAP
+        preprocessor = inference_pipeline.model.named_steps["preprocessor"]
+        X_shap_transformed = preprocessor.transform(df_features)
+
+        # ColumnTransformer reorders columns (transformers first, passthrough last).
+        # We need the exact feature names the model sees.
+        try:
+            out_cols = preprocessor.get_feature_names_out()
+            # Clean up the 'cat__' and 'remainder__' prefixes
+            out_cols = [c.split("__")[-1] for c in out_cols]
+            X_shap_df = pd.DataFrame(X_shap_transformed, columns=out_cols)
+        except Exception:
+            # Fallback if get_feature_names_out fails
+            X_shap_df = X_shap_transformed
+    else:
+        X_shap_df = df_features
+
     tx_id = raw_tx.get("TransactionID", "tx_current")
 
     # 4. Generate SHAP explanation
     explanations = shap_engine.explain(
         model=estimator,
-        X_sample=df_features,
-        X_shap=df_features,
+        X_sample=df_features,  # Raw strings for human-readable reasons
+        X_shap=X_shap_df,  # Encoded integers for SHAP math
         tx_ids=[tx_id],
         top_k=top_k,
     )
@@ -93,10 +112,23 @@ def _compute_batch_explanations(
 
     # 4. Extract estimator and execute batch SHAP TreeExplainer
     estimator = _extract_estimator(inference_pipeline.model)
+
+    if hasattr(inference_pipeline.model, "named_steps") and "preprocessor" in inference_pipeline.model.named_steps:
+        preprocessor = inference_pipeline.model.named_steps["preprocessor"]
+        X_shap_transformed = preprocessor.transform(combined_df)
+        try:
+            out_cols = preprocessor.get_feature_names_out()
+            out_cols = [c.split("__")[-1] for c in out_cols]
+            X_shap_df = pd.DataFrame(X_shap_transformed, columns=out_cols)
+        except Exception:
+            X_shap_df = X_shap_transformed
+    else:
+        X_shap_df = combined_df
+
     explanations = shap_engine.explain(
         model=estimator,
         X_sample=combined_df,
-        X_shap=combined_df,
+        X_shap=X_shap_df,
         tx_ids=tx_ids,
         top_k=top_k,
     )

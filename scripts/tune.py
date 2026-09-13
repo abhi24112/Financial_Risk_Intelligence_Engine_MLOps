@@ -79,8 +79,8 @@ def main():
 
     base_config = load_config("model.yaml")
 
-    models_to_tune = ["xgboost", "lightgbm", "random_forest"]
-    num_trials = 40  # You can change this to 20 or 50 later
+    models_to_tune = ["lightgbm"]
+    num_trials = 30  # You can change this to 20 or 50 later
 
     for model_type in models_to_tune:
         logger.info("\n")

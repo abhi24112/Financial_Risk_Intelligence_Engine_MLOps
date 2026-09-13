@@ -6,6 +6,7 @@ from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
     f1_score,
+    fbeta_score,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -41,6 +42,7 @@ class ModelEvaluator:
         roc_auc = float(roc_auc_score(y_test, y_prob))
         pr_auc = float(average_precision_score(y_test, y_prob))
         f1 = float(f1_score(y_test, y_pred))
+        f2 = float(fbeta_score(y_test, y_pred, beta=2.0))
         recall = float(recall_score(y_test, y_pred))
         precision = float(precision_score(y_test, y_pred))
 
@@ -52,6 +54,7 @@ class ModelEvaluator:
             "test_roc_auc": roc_auc,
             "test_pr_auc": pr_auc,
             "test_f1_score": f1,
+            "test_f2_score": f2,
             "test_recall": recall,
             "test_precision": precision,
             "test_true_negatives": tn,

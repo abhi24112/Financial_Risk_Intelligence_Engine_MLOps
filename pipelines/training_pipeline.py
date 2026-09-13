@@ -101,7 +101,19 @@ class TrainingPipeline(BasePipeline):
             joblib.dump(pipeline, local_model_path)
 
             # 7. Log Model to MLflow
-            mlflow_sklearn.log_model(sk_model=pipeline, artifact_path="model")
+            # MLflow uses `skops` for security, which blocks 3rd-party objects by default.
+            # We explicitly whitelist XGBoost and LightGBM classes.
+            mlflow_sklearn.log_model(
+                sk_model=pipeline,
+                artifact_path="model",
+                skops_trusted_types=[
+                    "collections.OrderedDict",
+                    "lightgbm.basic.Booster",
+                    "lightgbm.sklearn.LGBMClassifier",
+                    "xgboost.core.Booster",
+                    "xgboost.sklearn.XGBClassifier",
+                ],
+            )
 
             active_run = mlflow.active_run()
             run_id = active_run.info.run_id if active_run else "unknown"

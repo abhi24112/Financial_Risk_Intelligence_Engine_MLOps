@@ -49,17 +49,10 @@ class ModelTrainer:
                 "objective": "binary:logistic",
                 "eval_metric": "auc",
                 "scale_pos_weight": scale_pos_weight,
-                "enable_categorical": True,
-                "tree_method": "hist",  # Required for XGBoost native categorical support
                 "random_state": 42,
             }
             default_params.update(self.params)
-
-            # model
             model = xgb.XGBClassifier(**default_params)
-
-            # No preprocessing needed, XGBoost handles categories natively
-            return Pipeline(steps=[("model", model)])
 
         elif self.model_type == "lightgbm":
             default_params = {
@@ -72,9 +65,6 @@ class ModelTrainer:
             default_params.update(self.params)
             model = lgb.LGBMClassifier(**default_params)
 
-            # No preprocessing needed, LightGBM handles categories natively
-            return Pipeline(steps=[("model", model)])
-
         elif self.model_type == "random_forest":
             default_params = {
                 "n_estimators": 100,
@@ -85,17 +75,19 @@ class ModelTrainer:
             default_params.update(self.params)
             model = RandomForestClassifier(**default_params)
 
-            # Random Forest REQUIRES ordinal encoding for categories
-            if len(cat_cols) > 0:
-                self.logger.info(f"Adding OrdinalEncoder for {len(cat_cols)} categorical columns for Random Forest.")
-                # handle_unknown='use_encoded_value' ensures unseen test categories don't crash the pipeline
-                encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
-                preprocessor = ColumnTransformer(transformers=[("cat", encoder, cat_cols)], remainder="passthrough")
-                return Pipeline(steps=[("preprocessor", preprocessor), ("model", model)])
-            else:
-                return Pipeline(steps=[("model", model)])
         else:
             raise ValueError(f"Unsupported model_type: {self.model_type}. Choose from: xgboost, lightgbm, random_forest")
+
+        # 3. Apply OrdinalEncoder to ALL models
+        # This guarantees the string->int mapping is saved inside the pipeline
+        if len(cat_cols) > 0:
+            self.logger.info(f"Adding OrdinalEncoder for {len(cat_cols)} categorical columns.")
+            # handle_unknown='use_encoded_value' maps unseen inference categories (like 'protonmail.com' if not in train) to -1
+            encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+            preprocessor = ColumnTransformer(transformers=[("cat", encoder, cat_cols)], remainder="passthrough")
+            return Pipeline(steps=[("preprocessor", preprocessor), ("model", model)])
+        else:
+            return Pipeline(steps=[("model", model)])
 
     def train(self, X_train: pd.DataFrame, y_train: pd.Series, X_val: pd.DataFrame, y_val: pd.Series) -> Pipeline:
         """
@@ -107,16 +99,22 @@ class ModelTrainer:
         self.logger.info(f"Starting training on {len(X_train)} rows...")
 
         if self.model_type in ["xgboost", "lightgbm"]:
-            # Extract underlying model to pass the validation set for monitoring
             model = pipeline.named_steps["model"]
 
-            fit_params: dict[str, Any] = {"eval_set": [(X_val, y_val)]}
+            # Manually transform validation set for early stopping / eval_set
+            if "preprocessor" in pipeline.named_steps:
+                preprocessor = pipeline.named_steps["preprocessor"]
+                X_train_transformed = preprocessor.fit_transform(X_train)
+                X_val_transformed = preprocessor.transform(X_val)
+            else:
+                X_train_transformed = X_train
+                X_val_transformed = X_val
+
+            fit_params: dict[str, Any] = {"eval_set": [(X_val_transformed, y_val)]}
             if self.model_type == "xgboost":
                 fit_params["verbose"] = False
-            elif self.model_type == "lightgbm":
-                pass
 
-            model.fit(X_train, y_train, **fit_params)
+            model.fit(X_train_transformed, y_train, **fit_params)
         else:
             # Random Forest and Standard Scikit-Learn models are fit directly
             pipeline.fit(X_train, y_train)

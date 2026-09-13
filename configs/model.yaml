@@ -6,15 +6,15 @@ mlflow_tracking_uri: null
 
 model:
   # Supported types: "xgboost", "lightgbm", "random_forest"
-  model_type: "xgboost"
+  model_type: "lightgbm"
   
   # Hyperparameters that map directly to the chosen model
   model_params:
-    max_depth: 5
-    learning_rate: 0.05
-    n_estimators: 150
-    subsample: 0.8
-    colsample_bytree: 0.8
+    max_depth: 6
+    learning_rate: 0.02926086634642911
+    n_estimators: 288
+    num_leaves: 72
+    subsample: 0.8715053440362988
     random_state: 42
 
 target_run_id: null # Set to null for automatic Champion/Challenger selection based on PR-AUC

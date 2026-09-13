@@ -335,6 +335,7 @@
 
                 <div class="preset-buttons">
                     <button class="btn-preset" onclick="loadNormal()">Normal Tx ($30.00)</button>
+                    <button class="btn-preset" onclick="loadMedium()">Medium Tx ($150.00)</button>
                     <button class="btn-preset" onclick="loadFraud()">Suspicious Tx ($225.00)</button>
                     <button class="btn-preset" onclick="loadBatchSample()">Batch Sample (3 Tx)</button>
                 </div>
@@ -522,8 +523,27 @@
             ]
         };
 
+        const mediumPayload = {
+            "TransactionAmt": 150.00,
+            "TransactionDT": 89000,
+            "ProductCD": "H",
+            "card1": "1790",
+            "card2": "555",
+            "card3": "150",
+            "card6": "credit",
+            "P_emaildomain": "hotmail.com"
+        };
+
         function loadNormal() {
             document.getElementById("payload-input").value = JSON.stringify(normalPayload, null, 2);
+            document.getElementById("single-view").style.display = "block";
+            document.getElementById("batch-view").style.display = "none";
+            document.getElementById("raw-output").textContent = "{}";
+            document.getElementById("reasons-container").innerHTML = `<li style="border-left-color: #475569; color: #94a3b8;">Click 'Explain Risk Factors' to inspect SHAP feature attribution.</li>`;
+        }
+
+        function loadMedium() {
+            document.getElementById("payload-input").value = JSON.stringify(mediumPayload, null, 2);
             document.getElementById("single-view").style.display = "block";
             document.getElementById("batch-view").style.display = "none";
             document.getElementById("raw-output").textContent = "{}";

@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import shap
 
@@ -60,6 +61,14 @@ class SHAPEngine:
             return f"Time elapsed since previous transaction ({feature_value}s) {direction} the risk score."
         elif "missing" in feature_name.lower():
             return f"Missing information indicator in '{feature_name}' {direction} the risk score."
+        elif "amount_last_24h" in feature_name:
+            if feature_value == 0.0:
+                return f"Customer had no other transactions in the last 24 hours (Value: $0.00), which {direction} the risk score."
+            return f"Cumulative transaction amount in the last 24 hours (${feature_value}) {direction} the risk score."
+        elif "identity_avg_amount" in feature_name:
+            return f"Customer's historical average transaction amount (${feature_value}) {direction} the risk score."
+        elif "amount_vs_identity_avg" in feature_name:
+            return f"Ratio of current transaction amount to historical average (Multiplier: {feature_value}x) {direction} the risk score."
         else:
             return f"Behavioral metric '{feature_name}' (Value: {feature_value}) {direction} the risk score."
 
@@ -95,7 +104,15 @@ class SHAPEngine:
             tx_shap_vals = shap_values[i]
 
             # Combine feature names, their SHAP values, and the actual feature value from X_sample
-            feature_impacts = list(zip(X_shap.columns, tx_shap_vals, X_sample.iloc[i].values, strict=False))
+            feature_impacts = []
+            for col_idx, col_name in enumerate(X_shap.columns):
+                shap_val = tx_shap_vals[col_idx]
+
+                # Look up the raw, original feature value BY NAME rather than position,
+                # because the preprocessor (ColumnTransformer) reorders columns.
+                feat_val = X_sample.iloc[i].get(col_name, np.nan)
+
+                feature_impacts.append((col_name, shap_val, feat_val))
 
             # Sort by absolute SHAP value (importance)
             feature_impacts.sort(key=lambda x: abs(x[1]), reverse=True)
