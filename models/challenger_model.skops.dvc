@@ -1,0 +1,5 @@
+outs:
+- md5: ad82d8960f6b9e934b5d4fca446ac6e2
+  size: 2873719
+  hash: md5
+  path: challenger_model.skops

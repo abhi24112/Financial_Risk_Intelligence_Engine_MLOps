@@ -144,6 +144,6 @@ jobs:
             echo "Deployment signal sent successfully! ECS Fargate is now rolling out the updated container."
           else
             echo "Notice: ECS Service '${{ env.ECS_SERVICE }}' is not currently ACTIVE in cluster '${{ env.ECS_CLUSTER }}'."
-            echo "The newly built Docker image was successfully packaged and pushed to Amazon ECR (${{ env.ECR_REPOSITORY }})."
+            echo "The newly built Docker image was successfully packaged and pushed to Amazon (${{ env.ECR_REPOSITORY }})."
             echo "It will automatically be pulled when the ECS service is launched or scaled up."
           fi
